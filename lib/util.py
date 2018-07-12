@@ -330,7 +330,10 @@ def android_data_dir():
 def android_headers_dir():
     d = android_ext_dir() + '/org.electrum.electrum'
     if not os.path.exists(d):
-        os.mkdir(d)
+        try:
+            os.mkdir(d)
+        except FileExistsError:
+            pass  # in case of race
     return d
 
 def android_check_data_dir():
@@ -586,6 +589,8 @@ mainnet_block_explorers = {
                         {'tx': 'transaction/', 'addr': 'address/'}),
     'blockonomics.co': ('https://www.blockonomics.co/',
                         {'tx': 'api/tx?txid=', 'addr': '#/search?q='}),
+    'OXT.me': ('https://oxt.me/',
+                        {'tx': 'transaction/', 'addr': 'address/'}),
     'system default': ('blockchain:/',
                         {'tx': 'tx/', 'addr': 'address/'}),
 }
