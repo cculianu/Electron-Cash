@@ -112,6 +112,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         self.setup_exception_hook()
 
+        self.wallet = wallet # HistoryList needs this now
         self.network = gui_object.daemon.network
         self.fx = gui_object.daemon.fx
         self.invoices = wallet.invoices
@@ -226,8 +227,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     @rate_limited(3.0) # Rate limit to no more than once every 3 seconds
     def on_fx_history(self):
         if self.cleaned_up: return
-        self.history_list.refresh_headers()
-        self.history_list.update()
+        #self.history_list.refresh_headers()
+        self.history_list.refresh()
+        #self.history_list.update()
         self.address_list.update()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
 
@@ -245,7 +247,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         edit.textEdited.emit(edit.text())
         # History tab needs updating if it used spot
         if self.fx.history_used_spot:
-            self.history_list.update()
+            #self.history_list.update()
+            self.history_list.refresh()
             self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
 
     def toggle_tab(self, tab):
@@ -333,7 +336,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         elif event == 'banner':
             self.console.showMessage(args[0])
         elif event == 'verified':
-            self.history_list.update_item(*args)
+            #self.history_list.update_item(*args)
+            self.history_list.refresh()
         elif event == 'fee':
             pass
         else:
@@ -361,7 +365,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.wallet = wallet
         self.update_recently_visited(wallet.storage.path)
         # address used to create a dummy transaction and estimate transaction fee
-        self.history_list.update()
+        #self.history_list.update()
+        self.history_list.refresh()
         self.address_list.update()
         self.utxo_list.update()
         self.need_update.set()
@@ -784,7 +789,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.update_tabs()
 
     def update_tabs(self):
-        self.history_list.update()
+        #self.history_list.update()
+        self.history_list.refresh()
         self.request_list.update()
         self.address_list.update()
         self.utxo_list.update()
@@ -794,10 +800,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
 
     def create_history_tab(self):
-        from .history_list import HistoryList
-        self.history_list = l = HistoryList(self)
+        #from .history_list import HistoryList
+        #self.history_list = l = HistoryList(self)
+        #l.searchable_list = l
+        #return l
+        from .history_list import (HistoryList, HistoryModel)
+        self.history_model = HistoryModel(self)
+        self.history_list = l = HistoryList(self, self.history_model)
+        self.history_model.set_view(self.history_list)
         l.searchable_list = l
-        return l
+        toolbar = l.create_toolbar(self.config)
+        toolbar_shown = self.config.get('show_toolbar_history', False)
+        l.show_toolbar(toolbar_shown)
+        return self.create_list_tab2(l, toolbar)
 
     def show_address(self, addr):
         from . import address_dialog
@@ -1793,6 +1808,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox.addWidget(l)
         return w
 
+    def create_list_tab2(self, l, toolbar=None):
+        w = QWidget()
+        w.searchable_list = l
+        vbox = QVBoxLayout()
+        w.setLayout(vbox)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+        if toolbar:
+            vbox.addLayout(toolbar)
+        vbox.addWidget(l)
+        return w
+
+
     def create_addresses_tab(self):
         from .address_list import AddressList
         self.address_list = l = AddressList(self)
@@ -1816,7 +1844,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                            .format(addr.to_ui_string()))):
             self.wallet.delete_address(addr)
             self.address_list.update()
-            self.history_list.update()
+            #self.history_list.update()
+            self.history_list.refresh()
             self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
             self.clear_receive_tab()
 
@@ -1861,7 +1890,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         old_entry = self.contacts.get(address, None)
         self.contacts[address] = ('address', label)
         self.contact_list.update()
-        self.history_list.update()
+        #self.history_list.update()
+        self.history_list.refresh()
+
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
         self.update_completions()
 
@@ -1879,7 +1910,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 removed_entries.append((address, self.contacts[address]))
             self.contacts.pop(address)
 
-        self.history_list.update()
+        #self.history_list.update()
+        self.history_list.refresh()
+
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
         self.contact_list.update()
         self.update_completions()
@@ -1921,7 +1954,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         def do_delete():
             if self.question(_('Delete invoice?')):
                 self.invoices.remove(key)
-                self.history_list.update()
+                #self.history_list.update()
+                self.history_list.refresh()
                 self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
                 self.invoice_list.update()
                 d.close()
@@ -2523,7 +2557,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except (IOError, os.error) as reason:
             self.show_critical(_("Electron Cash was unable to import your labels.") + "\n" + str(reason))
         self.address_list.update()
-        self.history_list.update()
+        #self.history_list.update()
+        self.history_list.refresh()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
 
     def do_export_labels(self):
@@ -2667,7 +2702,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if bad:
             self.show_critical(_("The following inputs could not be imported") + ':\n'+ '\n'.join(bad))
         self.address_list.update()
-        self.history_list.update()
+        #self.history_list.update()
+        self.history_list.refresh()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
 
     def import_addresses(self):
@@ -2692,7 +2728,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.fiat_send_e.setVisible(b)
         self.fiat_receive_e.setVisible(b)
         self.history_list.refresh_headers()
-        self.history_list.update()
+        #self.history_list.update()
+        self.history_list.refresh()
         self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
         self.address_list.refresh_headers()
         self.address_list.update()
@@ -2778,7 +2815,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if self.num_zeros != value:
                 self.num_zeros = value
                 self.config.set_key('num_zeros', value, True)
-                self.history_list.update()
+                #self.history_list.update()
+                self.history_list.refresh()
                 self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
                 self.address_list.update()
         nz.valueChanged.connect(on_nz)
@@ -2880,7 +2918,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 raise Exception('Unknown base unit')
             self.config.set_key('decimal_point', self.decimal_point, True)
             nz.setMaximum(self.decimal_point)
-            self.history_list.update()
+            #self.history_list.update()
+            self.history_list.refresh()
             self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
             self.request_list.update()
             self.address_list.update()

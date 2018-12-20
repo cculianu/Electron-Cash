@@ -23,13 +23,14 @@
 
 import binascii
 import os, sys, re, json, time
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from datetime import datetime
 from decimal import Decimal
 import traceback
 import threading
 import hmac
 import stat
+from typing import NamedTuple
 
 from .i18n import _
 
@@ -606,3 +607,120 @@ def setup_thread_excepthook():
 
 def versiontuple(v):
     return tuple(map(int, (v.split("."))))
+
+from typing import Optional
+# Pulled from Electrum, used in HistoryList
+class TxMinedInfo(NamedTuple):
+    height: int                        # height of block that mined tx
+    conf: Optional[int] = None         # number of confirmations (None means unknown)
+    timestamp: Optional[int] = None    # timestamp of block that mined tx
+    txpos: Optional[int] = None        # position of tx in serialized block
+    header_hash: Optional[str] = None  # hash of block that mined tx
+
+# Pulled from Electrum, used in HistoryList
+class OrderedDictWithIndex(OrderedDict):
+    """An OrderedDict that keeps track of the positions of keys.
+
+    Note: very inefficient to modify contents, except to add new items.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._key_to_pos = {}
+        self._pos_to_key = {}
+
+    def _recalc_index(self):
+        self._key_to_pos = {key: pos for (pos, key) in enumerate(self.keys())}
+        self._pos_to_key = {pos: key for (pos, key) in enumerate(self.keys())}
+
+    def pos_from_key(self, key):
+        return self._key_to_pos[key]
+
+    def value_from_pos(self, pos):
+        key = self._pos_to_key[pos]
+        return self[key]
+
+    def popitem(self, *args, **kwargs):
+        ret = super().popitem(*args, **kwargs)
+        self._recalc_index()
+        return ret
+
+    def move_to_end(self, *args, **kwargs):
+        ret = super().move_to_end(*args, **kwargs)
+        self._recalc_index()
+        return ret
+
+    def clear(self):
+        ret = super().clear()
+        self._recalc_index()
+        return ret
+
+    def pop(self, *args, **kwargs):
+        ret = super().pop(*args, **kwargs)
+        self._recalc_index()
+        return ret
+
+    def update(self, *args, **kwargs):
+        ret = super().update(*args, **kwargs)
+        self._recalc_index()
+        return ret
+
+    def __delitem__(self, *args, **kwargs):
+        ret = super().__delitem__(*args, **kwargs)
+        self._recalc_index()
+        return ret
+
+    def __setitem__(self, key, *args, **kwargs):
+        is_new_key = key not in self
+        ret = super().__setitem__(key, *args, **kwargs)
+        if is_new_key:
+            pos = len(self) - 1
+            self._key_to_pos[key] = pos
+            self._pos_to_key[pos] = key
+        return ret
+
+# note: this is not a NamedTuple as then its json encoding cannot be customized
+class Satoshis(object):
+    __slots__ = ('value',)
+
+    def __new__(cls, value):
+        self = super(Satoshis, cls).__new__(cls)
+        self.value = value
+        return self
+
+    def __repr__(self):
+        return 'Satoshis(%d)'%self.value
+
+    def __str__(self):
+        return format_satoshis(self.value) + " BTC"
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __ne__(self, other):
+        return not (self == other)
+
+# note: this is not a NamedTuple as then its json encoding cannot be customized
+class Fiat(object):
+    __slots__ = ('value', 'ccy')
+
+    def __new__(cls, value, ccy):
+        self = super(Fiat, cls).__new__(cls)
+        self.ccy = ccy
+        self.value = value
+        return self
+
+    def __repr__(self):
+        return 'Fiat(%s)'% self.__str__()
+
+    def __str__(self):
+        if self.value is None or self.value.is_nan():
+            return _('No Data')
+        else:
+            return "{:.2f}".format(self.value) + ' ' + self.ccy
+
+    def __eq__(self, other):
+        return self.ccy == other.ccy and self.value == other.value
+
+    def __ne__(self, other):
+        return not (self == other)

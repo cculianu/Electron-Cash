@@ -694,6 +694,213 @@ def rate_limited(rate):
         return wrapper
     return wrapper0
 
+# Pulled from Electrum, used in HistoryList
+from typing import Optional
+class MyTreeView(QTreeView):
+
+    def __init__(self, parent: 'ElectrumWindow', create_menu, stretch_column=None, editable_columns=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.config = self.parent.config
+        self.stretch_column = stretch_column
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(create_menu)
+        self.setUniformRowHeights(True)
+
+        self.icon_cache = IconCache()
+
+        # Control which columns are editable
+        if editable_columns is None:
+            editable_columns = {stretch_column}
+        else:
+            editable_columns = set(editable_columns)
+        self.editable_columns = editable_columns
+        self.setItemDelegate(ElectrumItemDelegate(self))
+        self.current_filter = ""
+
+        self.setRootIsDecorated(False)  # remove left margin
+        self.toolbar_shown = False
+
+        # When figuring out the size of columns, Qt by default looks at
+        # the first 1000 rows (at least if resize mode is QHeaderView.ResizeToContents).
+        # This would be REALLY SLOW, and it's not perfect anyway.
+        # So to speed the UI up considerably, set it to
+        # only look at as many rows as currently visible.
+        self.header().setResizeContentsPrecision(0)
+
+    def set_editability(self, items):
+        for idx, i in enumerate(items):
+            i.setEditable(idx in self.editable_columns)
+
+    def selected_in_column(self, column: int):
+        items = self.selectionModel().selectedIndexes()
+        return list(x for x in items if x.column() == column)
+
+    def current_item_user_role(self, col) -> Optional[QStandardItem]:
+        idx = self.selectionModel().currentIndex()
+        idx = idx.sibling(idx.row(), col)
+        item = self.model().itemFromIndex(idx)
+        if item:
+            return item.data(Qt.UserRole)
+
+    def set_current_idx(self, set_current: QPersistentModelIndex):
+        if set_current:
+            assert isinstance(set_current, QPersistentModelIndex)
+            assert set_current.isValid()
+            self.selectionModel().select(QModelIndex(set_current), QItemSelectionModel.SelectCurrent)
+
+    def update_headers(self, headers):
+        model = self.model()
+        model.setHorizontalHeaderLabels(headers)
+        self.header().setStretchLastSection(False)
+        for col in range(len(headers)):
+            sm = QHeaderView.Stretch if col == self.stretch_column else QHeaderView.ResizeToContents
+            self.header().setSectionResizeMode(col, sm)
+
+    def keyPressEvent(self, event):
+        if self.itemDelegate().opened:
+            return
+        if event.key() in [ Qt.Key_F2, Qt.Key_Return ]:
+            self.on_activated(self.selectionModel().currentIndex())
+            return
+        super().keyPressEvent(event)
+
+    def on_activated(self, idx):
+        # on 'enter' we show the menu
+        pt = self.visualRect(idx).bottomLeft()
+        pt.setX(50)
+        self.customContextMenuRequested.emit(pt)
+
+    def edit(self, idx, trigger=QAbstractItemView.AllEditTriggers, event=None):
+        """
+        this is to prevent:
+           edit: editing failed
+        from inside qt
+        """
+        return super().edit(idx, trigger, event)
+
+    def on_edited(self, idx: QModelIndex, user_role, text):
+        self.parent.wallet.set_label(user_role, text)
+        self.parent.history_model.refresh('on_edited in MyTreeView')
+        self.parent.update_completions()
+
+    def should_hide(self, row):
+        """
+        row_num is for self.model(). So if there is a proxy, it is the row number
+        in that!
+        """
+        return False
+
+    def text_txid_from_coordinate(self, row_num, column):
+        assert not isinstance(self.model(), QSortFilterProxyModel)
+        idx = self.model().index(row_num, column)
+        item = self.model().itemFromIndex(idx)
+        user_role = item.data(Qt.UserRole)
+        return item.text(), user_role
+
+    def hide_row(self, row_num):
+        """
+        row_num is for self.model(). So if there is a proxy, it is the row number
+        in that!
+        """
+        should_hide = self.should_hide(row_num)
+        if not self.current_filter and should_hide is None:
+            # no filters at all, neither date nor search
+            self.setRowHidden(row_num, QModelIndex(), False)
+            return
+        for column in self.filter_columns:
+            txt, _ = self.text_txid_from_coordinate(row_num, column)
+            txt = txt.lower()
+            if self.current_filter in txt:
+                # the filter matched, but the date filter might apply
+                self.setRowHidden(row_num, QModelIndex(), bool(should_hide))
+                break
+        else:
+            # we did not find the filter in any columns, hide the item
+            self.setRowHidden(row_num, QModelIndex(), True)
+
+    def filter(self, p):
+        p = p.lower()
+        self.current_filter = p
+        self.hide_rows()
+
+    def hide_rows(self):
+        for row in range(self.model().rowCount()):
+            self.hide_row(row)
+
+    def create_toolbar(self, config=None):
+        hbox = QHBoxLayout()
+        buttons = self.get_toolbar_buttons()
+        for b in buttons:
+            b.setVisible(False)
+            hbox.addWidget(b)
+        hide_button = QPushButton('x')
+        hide_button.setVisible(False)
+        hide_button.pressed.connect(lambda: self.show_toolbar(False, config))
+        self.toolbar_buttons = buttons + (hide_button,)
+        hbox.addStretch()
+        hbox.addWidget(hide_button)
+        return hbox
+
+    def save_toolbar_state(self, state, config):
+        pass  # implemented in subclasses
+
+    def show_toolbar(self, state, config=None):
+        if state == self.toolbar_shown:
+            return
+        self.toolbar_shown = state
+        if config:
+            self.save_toolbar_state(state, config)
+        for b in self.toolbar_buttons:
+            b.setVisible(state)
+        if not state:
+            self.on_hide_toolbar()
+
+    def toggle_toolbar(self, config=None):
+        self.show_toolbar(not self.toolbar_shown, config)
+
+class AcceptFileDragDrop:
+    def __init__(self, file_type=""):
+        assert isinstance(self, QWidget)
+        self.setAcceptDrops(True)
+        self.file_type = file_type
+
+    def validateEvent(self, event):
+        if not event.mimeData().hasUrls():
+            event.ignore()
+            return False
+        for url in event.mimeData().urls():
+            if not url.toLocalFile().endswith(self.file_type):
+                event.ignore()
+                return False
+        event.accept()
+        return True
+
+    def dragEnterEvent(self, event):
+        self.validateEvent(event)
+
+    def dragMoveEvent(self, event):
+        if self.validateEvent(event):
+            event.setDropAction(Qt.CopyAction)
+
+    def dropEvent(self, event):
+        if self.validateEvent(event):
+            for url in event.mimeData().urls():
+                self.onFileAdded(url.toLocalFile())
+
+    def onFileAdded(self, fn):
+        raise NotImplementedError()
+
+class IconCache:
+
+    def __init__(self):
+        self.__cache = {}
+
+    def get(self, file_name):
+        if file_name not in self.__cache:
+            self.__cache[file_name] = QIcon(file_name)
+        return self.__cache[file_name]
+
 
 if __name__ == "__main__":
     app = QApplication([])

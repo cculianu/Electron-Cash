@@ -40,7 +40,7 @@ from decimal import Decimal
 from functools import partial
 
 from .i18n import _
-from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis
+from .util import NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, Satoshis, Fiat, TxMinedInfo, timestamp_to_datetime, format_time, format_fee_satoshis
 
 from .address import Address, Script, ScriptOutput, PublicKey
 from .bitcoin import *
@@ -202,6 +202,13 @@ class Abstract_Wallet(PrintError):
 
         # Verified transactions.  Each value is a (height, timestamp, block_pos) tuple.  Access with self.lock.
         self.verified_tx = storage.get('verified_tx3', {})
+        self.verified_tx2 = {}
+        for txid, (height, timestamp, txpos) in self.verified_tx.items():
+            self.verified_tx2[txid] = TxMinedInfo(height=height,
+                                                 conf=None,
+                                                 timestamp=timestamp,
+                                                 txpos=txpos,
+                                                 header_hash="00") #Fixme
 
         # there is a difference between wallet.up_to_date and interface.is_up_to_date()
         # interface.is_up_to_date() returns true when all requests have been answered and processed
@@ -422,6 +429,7 @@ class Abstract_Wallet(PrintError):
     def add_unverified_tx(self, tx_hash, tx_height):
         if tx_height == 0 and tx_hash in self.verified_tx:
             self.verified_tx.pop(tx_hash)
+            self.verified_tx2.pop(tx_hash, None)
             if self.verifier:
                 self.verifier.merkle_roots.pop(tx_hash, None)
 
@@ -434,7 +442,14 @@ class Abstract_Wallet(PrintError):
         self.unverified_tx.pop(tx_hash, None)
         with self.lock:
             self.verified_tx[tx_hash] = info  # (tx_height, timestamp, pos)
-        height, conf, timestamp = self.get_tx_height(tx_hash)
+            height, timestamp, txpos = info
+            height, conf, timestamp = self.get_tx_height(tx_hash)
+            info2 = TxMinedInfo(height=height,
+                                conf=conf,
+                                timestamp=timestamp,
+                                txpos=txpos,
+                                header_hash="00")
+            self.verified_tx2[tx_hash] = info2
         self.network.trigger_callback('verified', tx_hash, height, conf, timestamp)
 
     def get_unverified_txs(self):
@@ -452,6 +467,7 @@ class Abstract_Wallet(PrintError):
                     # fixme: use block hash, not timestamp
                     if not header or header.get('timestamp') != timestamp:
                         self.verified_tx.pop(tx_hash, None)
+                        self.verified_tx2.pop(tx_hash, None)
                         txs.add(tx_hash)
         return txs
 
@@ -863,6 +879,60 @@ class Abstract_Wallet(PrintError):
             else:
                 balance -= delta
         h2.reverse()
+
+        return h2
+
+    def get_tx_height2(self, tx_hash: str) -> TxMinedInfo:
+        with self.lock:
+            if tx_hash in self.verified_tx:
+                info = self.verified_tx2[tx_hash]
+                conf = max(self.get_local_height() - info.height + 1, 0)
+                return info._replace(conf=conf)
+            elif tx_hash in self.unverified_tx:
+                height = self.unverified_tx[tx_hash]
+                return TxMinedInfo(height=height, conf=0)
+            else:
+                # local transaction
+                return TxMinedInfo(height=self.get_local_height(), conf=0)
+
+    def get_history2(self, domain=None):
+        # get domain
+        if domain is None:
+            domain = self.get_addresses()
+        domain = set(domain)
+        # 1. Get the history of each address in the domain, maintain the
+        #    delta of a tx as the sum of its deltas on domain addresses
+        tx_deltas = defaultdict(int)
+        for addr in domain:
+            h = self.get_address_history(addr)
+            for tx_hash, height in h:
+                delta = self.get_tx_delta(tx_hash, addr)
+                if delta is None or tx_deltas[tx_hash] is None:
+                    tx_deltas[tx_hash] = None
+                else:
+                    tx_deltas[tx_hash] += delta
+        # 2. create sorted history
+        history = []
+        for tx_hash in tx_deltas:
+            delta = tx_deltas[tx_hash]
+            tx_mined_status = self.get_tx_height2(tx_hash)
+            history.append((tx_hash, tx_mined_status, delta))
+        history.sort(key = lambda x: self.get_txpos(x[0]), reverse=True)
+        # 3. add balance
+        c, u, x = self.get_balance(domain)
+        balance = c + u + x
+        h2 = []
+        for tx_hash, tx_mined_status, delta in history:
+            h2.append((tx_hash, tx_mined_status, delta, balance))
+            if balance is None or delta is None:
+                balance = None
+            else:
+                balance -= delta
+        h2.reverse()
+        # fixme: this may happen if history is incomplete
+        if balance not in [None, 0]:
+            self.print_error("Error: history not synchronized")
+            return []
 
         return h2
 
@@ -1521,6 +1591,142 @@ class Abstract_Wallet(PrintError):
         index = self.get_address_index(addr)
         return self.keystore.decrypt_message(index, message, password)
 
+    # taken from Electrum
+    @profiler
+    def get_full_history(self, domain=None, from_timestamp=None, to_timestamp=None,
+                         fx=None, show_addresses=False, show_fees=False):
+        out = []
+        income = 0
+        expenditures = 0
+        capital_gains = Decimal(0)
+        fiat_income = Decimal(0)
+        fiat_expenditures = Decimal(0)
+        h = self.get_history2(domain)
+        now = time.time()
+        # (tx_hash, height, conf, timestamp, delta))
+        for tx_hash, tx_mined_status, value, balance in h:
+            timestamp = tx_mined_status.timestamp
+            if from_timestamp and (timestamp or now) < from_timestamp:
+                continue
+            if to_timestamp and (timestamp or now) >= to_timestamp:
+                continue
+            tx = self.transactions.get(tx_hash)
+            item = {
+                'txid': tx_hash,
+                'height': tx_mined_status.height,
+                'confirmations': tx_mined_status.conf,
+                'timestamp': timestamp,
+                'value': Satoshis(value),
+                'balance': Satoshis(balance),
+                'date': timestamp_to_datetime(timestamp),
+                'label': self.get_label(tx_hash),
+                'txpos_in_block': tx_mined_status.txpos,
+            }
+            tx_fee = None
+            if show_fees:
+                tx_fee = self.get_tx_fee(tx)
+                item['fee'] = Satoshis(tx_fee) if tx_fee is not None else None
+            if show_addresses:
+                item['inputs'] = list(map(lambda x: dict((k, x[k]) for k in ('prevout_hash', 'prevout_n')), tx.inputs()))
+                item['outputs'] = list(map(lambda x:{'address':x.address, 'value':Satoshis(x.value)},
+                                           tx.get_outputs_for_UI()))
+            # value may be None if wallet is not fully synchronized
+            if value is None:
+                continue
+            # fixme: use in and out values
+            if value < 0:
+                expenditures += -value
+            else:
+                income += value
+            # fiat computations
+            if fx and fx.is_enabled() and False: #fx.get_history_config():
+                fiat_fields = self.get_tx_item_fiat(tx_hash, value, fx, tx_fee)
+                fiat_value = fiat_fields['fiat_value'].value
+                item.update(fiat_fields)
+                if value < 0:
+                    capital_gains += fiat_fields['capital_gain'].value
+                    fiat_expenditures += -fiat_value
+                else:
+                    fiat_income += fiat_value
+            out.append(item)
+        # add summary
+        if out:
+            b, v = out[0]['balance'].value, out[0]['value'].value
+            start_balance = None if b is None or v is None else b - v
+            end_balance = out[-1]['balance'].value
+            if from_timestamp is not None and to_timestamp is not None:
+                start_date = timestamp_to_datetime(from_timestamp)
+                end_date = timestamp_to_datetime(to_timestamp)
+            else:
+                start_date = None
+                end_date = None
+            summary = {
+                'start_date': start_date,
+                'end_date': end_date,
+                'start_balance': Satoshis(start_balance),
+                'end_balance': Satoshis(end_balance),
+                'income': Satoshis(income),
+                'expenditures': Satoshis(expenditures)
+            }
+            if fx and fx.is_enabled() and False:#fx.get_history_config():
+                unrealized = self.unrealized_gains(domain, fx.timestamp_rate, fx.ccy)
+                summary['capital_gains'] = Fiat(capital_gains, fx.ccy)
+                summary['fiat_income'] = Fiat(fiat_income, fx.ccy)
+                summary['fiat_expenditures'] = Fiat(fiat_expenditures, fx.ccy)
+                summary['unrealized_gains'] = Fiat(unrealized, fx.ccy)
+                summary['start_fiat_balance'] = Fiat(fx.historical_value(start_balance, start_date), fx.ccy)
+                summary['end_fiat_balance'] = Fiat(fx.historical_value(end_balance, end_date), fx.ccy)
+                summary['start_fiat_value'] = Fiat(fx.historical_value(COIN, start_date), fx.ccy)
+                summary['end_fiat_value'] = Fiat(fx.historical_value(COIN, end_date), fx.ccy)
+        else:
+            summary = {}
+        return {
+            'transactions': out,
+            'summary': summary
+        }
+
+    def get_tx_status2(self, tx_hash, tx_mined_info: TxMinedInfo):
+        extra = []
+        height = tx_mined_info.height
+        conf = tx_mined_info.conf
+        timestamp = tx_mined_info.timestamp
+        if conf == 0:
+            tx = self.transactions.get(tx_hash)
+            if not tx:
+                return 2, 'unknown'
+            is_final = tx and tx.is_final()
+            if not is_final:
+                extra.append('rbf')
+            fee = self.get_wallet_delta(tx)[3]
+            if fee is None:
+                fee = self.tx_fees.get(tx_hash)
+            if fee is not None:
+                size = tx.estimated_size()
+                fee_per_byte = fee / size
+                extra.append(format_fee_satoshis(fee_per_byte) + ' sat/b')
+            if fee is not None and height in (TX_HEIGHT_UNCONF_PARENT, TX_HEIGHT_UNCONFIRMED) \
+               and self.network and False:#self.network.config.has_fee_mempool():
+                exp_n = self.network.config.fee_to_depth(fee_per_byte)
+                if exp_n:
+                    extra.append('%.2f MB'%(exp_n/1000000))
+            if height == self.get_local_height():#TX_HEIGHT_LOCAL:
+                status = 3
+            elif height == TX_HEIGHT_UNCONF_PARENT:
+                status = 1
+            elif height == TX_HEIGHT_UNCONFIRMED:
+                status = 0
+            else:
+                status = 2  # not SPV verified
+        else:
+            status = 3 + min(conf, 6)
+        time_str = format_time(timestamp) if timestamp else _("unknown")
+        status_str = TX_STATUS[status] if status < 4 else time_str
+        if extra:
+            status_str += ' [%s]'%(', '.join(extra))
+        return status, status_str
+
+TX_HEIGHT_UNCONF_PARENT = -1
+TX_HEIGHT_UNCONFIRMED = 0
 
 class Simple_Wallet(Abstract_Wallet):
     # wallet with a single keystore
