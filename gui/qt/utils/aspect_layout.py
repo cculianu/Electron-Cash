@@ -30,28 +30,27 @@ class FixedAspectRatioLayout(QLayout):
     def __init__(self, parent: QWidget = None, aspect_ratio: float = 1.0):
         super().__init__(parent)
         self.aspect_ratio = aspect_ratio
-        self.item = None
+        self.items = []
 
     def setAspectRatio(self, aspect_ratio: float = 1.0):
         self.aspect_ratio = aspect_ratio
         self.update()
 
     def addItem(self, item: QLayoutItem):
-        if self.item:
-            raise RuntimeError('FixedAspectRatioLayout may only contain a single item')
-        self.item = item
+        self.items.append(item)
 
     def count(self) -> int:
-        return 1 if self.item else 0
+        return len(self.items)
 
     def itemAt(self, index: int) -> QLayoutItem:
-        return self.item if index == 0 else None
+        if index >= len(self.items):
+            return None
+        return self.items[index]
 
     def takeAt(self, index: int) -> QLayoutItem:
-        res = self.itemAt(index)
-        if index == 0:
-            self.item = None
-        return res
+        if index >= len(self.items):
+            return None
+        return self.items.pop(index)
 
     def _getContentsMarginsSize(self) -> QSize:
         margins = self.getContentsMargins()
@@ -59,7 +58,7 @@ class FixedAspectRatioLayout(QLayout):
 
     def setGeometry(self, rect: QRect):
         super().setGeometry(rect)
-        if not self.item:
+        if len(self.items) == 0:
             return
 
         content_size = rect.size() - self._getContentsMarginsSize()
@@ -73,32 +72,35 @@ class FixedAspectRatioLayout(QLayout):
         free_space = content_size - item_rect.size()
 
         if free_space.width() > 0:
-            if self.item.alignment() & Qt.AlignLeft:
+            if self.items[0].alignment() & Qt.AlignLeft:
                 item_rect.moveLeft(content_margins[1])
-            elif self.item.alignment() & Qt.AlignRight:
+            elif self.items[0].alignment() & Qt.AlignRight:
                 item_rect.moveRight(content_size.width() + content_margins[3])
             else:
                 item_rect.moveLeft(content_margins[1] + (free_space.width() / 2))
 
         if free_space.height() > 0:
-            if self.item.alignment() & Qt.AlignTop:
+            if self.items[0].alignment() & Qt.AlignTop:
                 item_rect.moveTop(content_margins[0])
-            elif self.item.alignment() & Qt.AlignBottom:
+            elif self.items[0].alignment() & Qt.AlignBottom:
                 item_rect.moveBottom(content_size.height() + content_margins[2])
             else:
                 item_rect.moveTop(content_margins[0] + (free_space.height() / 2))
 
-        self.item.widget().setGeometry(item_rect)
+        for item in self.items:
+            item.widget().setGeometry(item_rect)
 
     def sizeHint(self) -> QSize:
-        if not self.item:
+        if len(self.items) == 0:
             return self._getContentsMarginsSize()
-        return self._getContentsMarginsSize() + self.item.sizeHint()
+        # FIXME: Calculate proper sizeHint
+        return self._getContentsMarginsSize() + self.items[0].sizeHint()
 
     def minimumSize(self) -> QSize:
-        if not self.item:
+        if len(self.items) == 0:
             return self._getContentsMarginsSize()
-        return self._getContentsMarginsSize() + self.item.minimumSize()
+        # FIXME: Calculate proper minimumSize
+        return self._getContentsMarginsSize() + self.items[0].minimumSize()
 
     def expandingDirections(self) -> Qt.Orientations:
         return Qt.Horizontal | Qt.Vertical

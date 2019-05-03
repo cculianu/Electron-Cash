@@ -27,7 +27,7 @@ import time
 from typing import List
 
 from PyQt5.QtMultimedia import QCameraInfo, QCamera, QCameraViewfinderSettings
-from PyQt5.QtWidgets import QDialog, QVBoxLayout
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QCheckBox
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QSize, QRect, Qt
 
@@ -38,6 +38,7 @@ from electroncash.qrreaders import get_qr_reader
 from electroncash_gui.qt.utils import FixedAspectRatioLayout
 
 from .video_widget import QrReaderVideoWidget
+from .video_overlay import QrReaderVideoOverlay
 from .video_surface import QrReaderVideoSurface
 from .crop_blur_effect import QrReaderCropBlurEffect
 
@@ -64,15 +65,25 @@ class QrReaderCameraDialog(QDialog):
 
         # Create video widget and fixed aspect ratio layout to contain it
         self.video_widget = QrReaderVideoWidget()
-        self.video_widget_layout = FixedAspectRatioLayout()
-        self.video_widget_layout.setContentsMargins(0, 0, 0, 0)
-        self.video_widget_layout.addWidget(self.video_widget)
+        self.video_overlay = QrReaderVideoOverlay()
+        self.video_layout = FixedAspectRatioLayout()
+        self.video_layout.setContentsMargins(0, 0, 0, 0)
+        self.video_layout.addWidget(self.video_widget)
+        self.video_layout.addWidget(self.video_overlay)
 
         # Create root layout and add the video widget layout to it
         vbox = QVBoxLayout()
         vbox.setContentsMargins(0, 0, 0, 0)
         self.setLayout(vbox)
-        vbox.addLayout(self.video_widget_layout)
+        vbox.addLayout(self.video_layout)
+
+        # Create a layout for the controls
+        controls_layout = QHBoxLayout()
+        vbox.addLayout(controls_layout)
+
+        self.flip_x = QCheckBox()
+        self.flip_x.setText(_("&Flip horizontally"))
+        controls_layout.addWidget(self.flip_x)
 
         # Create the video surface and receive events when new frames arrive
         self.video_surface = QrReaderVideoSurface()
@@ -161,7 +172,9 @@ class QrReaderCameraDialog(QDialog):
         # Initialize the video widget
         self.video_widget.setMinimumSize(resolution)
         self.video_widget.setGraphicsEffect(QrReaderCropBlurEffect(self, resolution, self.qr_crop))
-        self.video_widget_layout.setAspectRatio(resolution.width() / resolution.height())
+        self.video_overlay.setCrop(self.qr_crop)
+        self.video_overlay.setResolution(resolution)
+        self.video_layout.setAspectRatio(resolution.width() / resolution.height())
 
         # Set the camera resolution
         viewfinder_settings = QCameraViewfinderSettings()
@@ -187,6 +200,8 @@ class QrReaderCameraDialog(QDialog):
     def on_frame_available(self, frame: QImage):
         self.frame_id += 1
 
+        flip_x = self.flip_x.isChecked()
+
         # Only QR scan every QR_SCAN_MODULO frames
         qr_scanned = self.frame_id % self.QR_SCAN_MODULO == 0
         if qr_scanned:
@@ -200,7 +215,11 @@ class QrReaderCameraDialog(QDialog):
             qrreader_res = self.qrreader.read_qr_code(frame_y800.constBits().__int__(), frame_y800.byteCount(),
                 frame_y800.width(), frame_y800.height(), self.frame_id)
 
-            self.video_widget.setResults(qrreader_res)
+            self.video_overlay.setResults(qrreader_res, flip_x)
+
+        # If horizontal flipping is enabled, only flip the display
+        if flip_x:
+            frame = frame.mirrored(True, False)
 
         # Display the frame in the widget
         self.video_widget.setPixmap(QPixmap.fromImage(frame))

@@ -31,7 +31,7 @@ class QrCodeResult():
     """
     A detected QR code.
     """
-    def __init__(self, data: str, center: Tuple[float, float], points: List[Tuple[float, float]]):
+    def __init__(self, data: str, center: Tuple[int, int], points: List[Tuple[int, int]]):
         self.data = data
         self.center = center
         self.points = points

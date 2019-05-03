@@ -136,8 +136,8 @@ class ZbarQrCodeReader(AbstractQrCodeReader):
             symbol_loc_len = LIBZBAR.zbar_symbol_get_loc_size(symbol)
             for i in range(0, symbol_loc_len):
                 # Normalize the coordinates into 0..1 range by dividing by width / height
-                symbol_loc_x = LIBZBAR.zbar_symbol_get_loc_x(symbol, i) / width
-                symbol_loc_y = LIBZBAR.zbar_symbol_get_loc_y(symbol, i) / height
+                symbol_loc_x = LIBZBAR.zbar_symbol_get_loc_x(symbol, i)
+                symbol_loc_y = LIBZBAR.zbar_symbol_get_loc_y(symbol, i)
                 symbol_loc.append((symbol_loc_x, symbol_loc_y))
 
             # Find the center by getting the average values of the corners x and y coordinates
