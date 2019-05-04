@@ -38,7 +38,7 @@ class QrReaderVideoWidget(QWidget):
 
         self.pixmap = None
 
-    def paintEvent(self, event: QPaintEvent):
+    def paintEvent(self, _event: QPaintEvent):
         if not self.pixmap:
             return
         painter = QPainter(self)

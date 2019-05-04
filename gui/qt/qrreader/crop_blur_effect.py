@@ -25,32 +25,29 @@
 
 from PyQt5.QtWidgets import QGraphicsBlurEffect, QGraphicsEffect
 from PyQt5.QtGui import QPainter, QTransform, QRegion
-from PyQt5.QtCore import QObject, QSize, QRect, QPoint, Qt
+from PyQt5.QtCore import QObject, QRect, QPoint, Qt
 
 class QrReaderCropBlurEffect(QGraphicsBlurEffect):
     CROP_OFFSET_ENABLED = False
     CROP_OFFSET = QPoint(5, 5)
 
     BLUR_DARKEN = 0.25
+    BLUR_RADIUS = 8
 
-    def __init__(self, parent: QObject, resolution: QSize, crop: QRect):
+    def __init__(self, parent: QObject, crop: QRect = None):
         super().__init__(parent)
         self.crop = crop
-        self.resolution = resolution
+        self.setBlurRadius(self.BLUR_RADIUS)
+
+    def setCrop(self, crop: QRect = None):
+        self.crop = crop
 
     def draw(self, painter: QPainter):
-        # Compute a scaled crop in case the window is bigger than resolution
-        source_rect = self.sourceBoundingRect()
-        ratio = source_rect.width() / self.resolution.width()
-        crop_scaled = QRect(self.crop.topLeft() * ratio, self.crop.size() * ratio)
-
-        # Compute new blur radius based on source widget size
-        blur_radius = source_rect.width() / 80
-        self.setBlurRadius(blur_radius)
+        assert self.crop, 'crop must be set'
 
         # Compute painter regions for the crop and the blur
-        all_region = QRegion(painter.window())
-        crop_region = QRegion(crop_scaled)
+        all_region = QRegion(painter.viewport())
+        crop_region = QRegion(self.crop)
         blur_region = all_region.subtracted(crop_region)
 
         # Let the QGraphicsBlurEffect only paint in blur_region
@@ -58,7 +55,7 @@ class QrReaderCropBlurEffect(QGraphicsBlurEffect):
 
         # Fill with black and set opacity so that the blurred region is drawn darker
         if self.BLUR_DARKEN > 0.0:
-            painter.fillRect(source_rect, Qt.black)
+            painter.fillRect(painter.viewport(), Qt.black)
             painter.setOpacity(1 - self.BLUR_DARKEN)
 
         # Draw the blur effect
@@ -73,7 +70,7 @@ class QrReaderCropBlurEffect(QGraphicsBlurEffect):
         painter.setWorldTransform(QTransform())
 
         # Get the source by adding the offset to the crop location
-        source = crop_scaled
+        source = self.crop
         if self.CROP_OFFSET_ENABLED:
             source = source.translated(self.CROP_OFFSET)
-        painter.drawPixmap(crop_scaled.topLeft() + offset, pixmap, source)
+        painter.drawPixmap(self.crop.topLeft() + offset, pixmap, source)

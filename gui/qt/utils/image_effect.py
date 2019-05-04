@@ -23,6 +23,30 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .aspect_layout import FixedAspectRatioLayout
-from .image_effect import ImageGraphicsEffect
-from .color_utils import QColorLerp
+from PyQt5.QtWidgets import QGraphicsEffect, QGraphicsScene, QGraphicsPixmapItem
+from PyQt5.QtGui import QImage, QPainter, QPixmap
+from PyQt5.QtCore import QObject, Qt
+
+class ImageGraphicsEffect(QObject):
+    """
+    Applies a QGraphicsEffect to a QImage
+    """
+
+    def __init__(self, parent: QObject, effect: QGraphicsEffect):
+        super().__init__(parent)
+        assert effect, 'effect must be set'
+        self.effect = effect
+        self.graphics_scene = QGraphicsScene()
+        self.graphics_item = QGraphicsPixmapItem()
+        self.graphics_item.setGraphicsEffect(effect)
+        self.graphics_scene.addItem(self.graphics_item)
+
+    def apply(self, image: QImage):
+        assert image, 'image must be set'
+        result = QImage(image.size(), QImage.Format_ARGB32)
+        result.fill(Qt.transparent)
+        painter = QPainter(result)
+        self.graphics_item.setPixmap(QPixmap.fromImage(image))
+        self.graphics_scene.render(painter)
+        self.graphics_item.setPixmap(QPixmap())
+        return result

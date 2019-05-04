@@ -27,17 +27,33 @@ import ctypes
 from typing import List, Tuple
 from abc import ABC, abstractmethod
 
+QrCodePoint = Tuple[int, int]
+QrCodePointList = List[QrCodePoint]
+
 class QrCodeResult():
+    data: str
+    center: QrCodePoint
+    points: QrCodePointList
+
     """
     A detected QR code.
     """
-    def __init__(self, data: str, center: Tuple[int, int], points: List[Tuple[int, int]]):
+    def __init__(self, data: str, center: QrCodePoint, points: QrCodePointList):
         self.data = data
         self.center = center
         self.points = points
 
     def __str__(self) -> str:
         return 'data: {} center: {} points: {}'.format(self.data, self.center, self.points)
+
+    def __hash__(self):
+        return hash(self.data)
+
+    def __eq__(self, other):
+        return self.data == other.data
+
+    def __ne__(self, other):
+        return not self == other
 
 class AbstractQrCodeReader(ABC):
     """

@@ -32,7 +32,7 @@ class FixedAspectRatioLayout(QLayout):
         self.aspect_ratio = aspect_ratio
         self.items = []
 
-    def setAspectRatio(self, aspect_ratio: float = 1.0):
+    def set_aspect_ratio(self, aspect_ratio: float = 1.0):
         self.aspect_ratio = aspect_ratio
         self.update()
 
@@ -52,55 +52,56 @@ class FixedAspectRatioLayout(QLayout):
             return None
         return self.items.pop(index)
 
-    def _getContentsMarginsSize(self) -> QSize:
-        margins = self.getContentsMargins()
-        return QSize(margins[0] + margins[2], margins[1] + margins[3])
+    def _get_contents_margins_size(self) -> QSize:
+        margins = self.contentsMargins()
+        return QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
 
     def setGeometry(self, rect: QRect):
         super().setGeometry(rect)
-        if len(self.items) == 0:
+        if not self.items:
             return
 
-        content_size = rect.size() - self._getContentsMarginsSize()
-        content_aspect_ratio = content_size.width() / content_size.height()
+        contents = self.contentsRect()
+        c_aratio = contents.width() / contents.height()
+        s_aratio = self.aspect_ratio
         item_rect = QRect(QPoint(0, 0), QSize(
-            content_size.width() if content_aspect_ratio < self.aspect_ratio else content_size.height() * self.aspect_ratio,
-            content_size.height() if content_aspect_ratio > self.aspect_ratio else content_size.width() / self.aspect_ratio
+            contents.width() if c_aratio < s_aratio else contents.height() * s_aratio,
+            contents.height() if c_aratio > s_aratio else contents.width() / s_aratio
         ))
 
-        content_margins = self.getContentsMargins()
-        free_space = content_size - item_rect.size()
-
-        if free_space.width() > 0:
-            if self.items[0].alignment() & Qt.AlignLeft:
-                item_rect.moveLeft(content_margins[1])
-            elif self.items[0].alignment() & Qt.AlignRight:
-                item_rect.moveRight(content_size.width() + content_margins[3])
-            else:
-                item_rect.moveLeft(content_margins[1] + (free_space.width() / 2))
-
-        if free_space.height() > 0:
-            if self.items[0].alignment() & Qt.AlignTop:
-                item_rect.moveTop(content_margins[0])
-            elif self.items[0].alignment() & Qt.AlignBottom:
-                item_rect.moveBottom(content_size.height() + content_margins[2])
-            else:
-                item_rect.moveTop(content_margins[0] + (free_space.height() / 2))
+        content_margins = self.contentsMargins()
+        free_space = contents.size() - item_rect.size()
 
         for item in self.items:
+            if free_space.width() > 0 and not item.alignment() & Qt.AlignLeft:
+                if item.alignment() & Qt.AlignRight:
+                    item_rect.moveRight(contents.width() + content_margins.right())
+                else:
+                    item_rect.moveLeft(content_margins.left() + (free_space.width() / 2))
+            else:
+                item_rect.moveLeft(content_margins.left())
+
+            if free_space.height() > 0 and not item.alignment() & Qt.AlignTop:
+                if item.alignment() & Qt.AlignBottom:
+                    item_rect.moveBottom(contents.height() + content_margins.bottom())
+                else:
+                    item_rect.moveTop(content_margins.top() + (free_space.height() / 2))
+            else:
+                item_rect.moveTop(content_margins.top())
+
             item.widget().setGeometry(item_rect)
 
     def sizeHint(self) -> QSize:
-        if len(self.items) == 0:
-            return self._getContentsMarginsSize()
-        # FIXME: Calculate proper sizeHint
-        return self._getContentsMarginsSize() + self.items[0].sizeHint()
+        result = QSize()
+        for item in self.items:
+            result = result.expandedTo(item.sizeHint())
+        return self._get_contents_margins_size() + result
 
     def minimumSize(self) -> QSize:
-        if len(self.items) == 0:
-            return self._getContentsMarginsSize()
-        # FIXME: Calculate proper minimumSize
-        return self._getContentsMarginsSize() + self.items[0].minimumSize()
+        result = QSize()
+        for item in self.items:
+            result = result.expandedTo(item.minimumSize())
+        return self._get_contents_margins_size() + result
 
     def expandingDirections(self) -> Qt.Orientations:
         return Qt.Horizontal | Qt.Vertical

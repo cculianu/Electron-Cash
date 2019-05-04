@@ -31,33 +31,50 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QCheckBox
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QSize, QRect, Qt
 
+from electroncash import get_config
 from electroncash.i18n import _
 from electroncash.util import print_error
-from electroncash.qrreaders import get_qr_reader
+from electroncash.qrreaders import get_qr_reader, QrCodeResult
 
-from electroncash_gui.qt.utils import FixedAspectRatioLayout
+from electroncash_gui.qt.utils import FixedAspectRatioLayout, ImageGraphicsEffect
 
 from .video_widget import QrReaderVideoWidget
 from .video_overlay import QrReaderVideoOverlay
 from .video_surface import QrReaderVideoSurface
 from .crop_blur_effect import QrReaderCropBlurEffect
+from .validator import AbstractQrReaderValidator, QrReaderValidatorSingle, QrReaderValidatorResult
 
 class QrReaderCameraDialog(QDialog):
+    """
+    Dialog for reading QR codes from a camera
+    """
+
     # Try to crop so we have minimum 512 dimensions
-    SCAN_SIZE = 512
+    SCAN_SIZE: int = 512
 
     # Try to QR scan every QR_SCAN_MODULO frames
-    QR_SCAN_MODULO = 2
+    QR_SCAN_MODULO: int = 2
+
+    validator: AbstractQrReaderValidator = None
+    frame_id: int = 0
+    qr_crop: QRect = QRect()
+    qrreader_res: List[QrCodeResult] = []
+    validator_res: QrReaderValidatorResult = None
+    last_stats_time: float = 0.0
+    frame_counter: int = 0
+    qr_frame_counter: int = 0
 
     def __init__(self, parent):
         QDialog.__init__(self, parent=parent)
 
+        self.config = get_config()
+
         # Try to get the QR reader for this system
         self.qrreader = get_qr_reader()
-        if self.qrreader is None:
+        if not self.qrreader:
             raise RuntimeError(_("Cannot start QR scanner, not available."))
 
-        # Set up the window
+        # Set up the window, add the maximize button
         flags = self.windowFlags()
         flags = flags | Qt.WindowMaximizeButtonHint
         self.setWindowFlags(flags)
@@ -67,27 +84,37 @@ class QrReaderCameraDialog(QDialog):
         self.video_widget = QrReaderVideoWidget()
         self.video_overlay = QrReaderVideoOverlay()
         self.video_layout = FixedAspectRatioLayout()
-        self.video_layout.setContentsMargins(0, 0, 0, 0)
         self.video_layout.addWidget(self.video_widget)
         self.video_layout.addWidget(self.video_overlay)
 
         # Create root layout and add the video widget layout to it
         vbox = QVBoxLayout()
-        vbox.setContentsMargins(0, 0, 0, 0)
         self.setLayout(vbox)
+        vbox.setContentsMargins(0, 0, 0, 0)
         vbox.addLayout(self.video_layout)
 
         # Create a layout for the controls
         controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(10, 10, 10, 10)
         vbox.addLayout(controls_layout)
 
+        # Flip horizontally checkbox with default coming from global config
         self.flip_x = QCheckBox()
         self.flip_x.setText(_("&Flip horizontally"))
+        self.flip_x.setChecked(self.config.get('qrreader_flip_x', False))
+        self.flip_x.stateChanged.connect(self._on_flip_x_changed)
         controls_layout.addWidget(self.flip_x)
 
         # Create the video surface and receive events when new frames arrive
-        self.video_surface = QrReaderVideoSurface()
-        self.video_surface.frame_available.connect(self.on_frame_available)
+        self.video_surface = QrReaderVideoSurface(self)
+        self.video_surface.frame_available.connect(self._on_frame_available)
+
+        # Create the crop blur effect
+        self.crop_blur_effect = QrReaderCropBlurEffect(self)
+        self.image_effect = ImageGraphicsEffect(self, self.crop_blur_effect)
+
+    def _on_flip_x_changed(self, _state: int):
+        self.config.set_key('qrreader_flip_x', self.flip_x.isChecked())
 
     @staticmethod
     def _get_resolution(resolutions: List[QSize], min_size: int) -> QSize:
@@ -114,7 +141,7 @@ class QrReaderCameraDialog(QDialog):
         print_error(format_str.format(res_list_to_str(usable_resolutions)))
 
         # Raise an error if we have no usable resolutions
-        if len(usable_resolutions) < 1:
+        if not usable_resolutions:
             raise RuntimeError(_("Cannot start QR scanner, no usable camera resolution found."))
 
         # Sort the usable resolutions, least number of pixels first, get the first element
@@ -129,16 +156,23 @@ class QrReaderCameraDialog(QDialog):
         """
         Returns a QRect that is scan_size x scan_size in the middle of the resolution
         """
-        x = (resolution.width() - scan_size) / 2
-        y = (resolution.height() - scan_size) / 2
-        return QRect(x, y, scan_size, scan_size)
+        scan_pos_x = (resolution.width() - scan_size) / 2
+        scan_pos_y = (resolution.height() - scan_size) / 2
+        return QRect(scan_pos_x, scan_pos_y, scan_size, scan_size)
 
-    def scan(self, device='') -> str:
+    def scan(
+            self,
+            device: str = '',
+            validator: AbstractQrReaderValidator = QrReaderValidatorSingle()
+        ) -> List[QrCodeResult]:
         """
         Scans a QR code from the given camera device.
         If no QR code is found the returned string will be empty.
         If the camera is not found or can't be opened a RuntimeError will be raised.
         """
+
+        self.validator = validator
+
         device_info = None
 
         for camera in QCameraInfo.availableCameras():
@@ -153,7 +187,7 @@ class QrReaderCameraDialog(QDialog):
         if not device_info or device_info.isNull():
             raise RuntimeError(_("Cannot start QR scanner, no usable camera found."))
 
-        self.init_stats()
+        self._init_stats()
 
         camera = QCamera(device_info)
         camera.setViewfinder(self.video_surface)
@@ -166,15 +200,17 @@ class QrReaderCameraDialog(QDialog):
 
         # Determine the optimal resolution and compute the crop rect
         camera_resolutions = camera.supportedViewfinderResolutions()
-        resolution = self.__class__._get_resolution(camera_resolutions, self.SCAN_SIZE)
-        self.qr_crop = self.__class__._get_crop(resolution, self.SCAN_SIZE)
+        resolution = self._get_resolution(camera_resolutions, self.SCAN_SIZE)
+        self.qr_crop = self._get_crop(resolution, self.SCAN_SIZE)
 
         # Initialize the video widget
         self.video_widget.setMinimumSize(resolution)
-        self.video_widget.setGraphicsEffect(QrReaderCropBlurEffect(self, resolution, self.qr_crop))
-        self.video_overlay.setCrop(self.qr_crop)
-        self.video_overlay.setResolution(resolution)
-        self.video_layout.setAspectRatio(resolution.width() / resolution.height())
+        self.video_overlay.set_crop(self.qr_crop)
+        self.video_overlay.set_resolution(resolution)
+        self.video_layout.set_aspect_ratio(resolution.width() / resolution.height())
+
+        # Set up the crop blur effect
+        self.crop_blur_effect.setCrop(self.qr_crop)
 
         # Set the camera resolution
         viewfinder_settings = QCameraViewfinderSettings()
@@ -188,16 +224,15 @@ class QrReaderCameraDialog(QDialog):
 
         self.exec()
 
+        camera.setViewfinder(None)
         camera.stop()
-
-        self.video_widget.setGraphicsEffect(None)
-        self.effect = None
+        camera.unload()
 
         print_error(_('QR code scanner closed'))
 
         return ''
 
-    def on_frame_available(self, frame: QImage):
+    def _on_frame_available(self, frame: QImage):
         self.frame_id += 1
 
         flip_x = self.flip_x.isChecked()
@@ -212,10 +247,25 @@ class QrReaderCameraDialog(QDialog):
             # This creates a copy, so we don't need to keep the frame around anymore
             frame_y800 = frame_cropped.convertToFormat(QImage.Format_Grayscale8)
 
-            qrreader_res = self.qrreader.read_qr_code(frame_y800.constBits().__int__(), frame_y800.byteCount(),
-                frame_y800.width(), frame_y800.height(), self.frame_id)
+            # Read the QR codes from the frame
+            self.qrreader_res = self.qrreader.read_qr_code(
+                frame_y800.constBits().__int__(), frame_y800.byteCount(), frame_y800.width(),
+                frame_y800.height(), self.frame_id
+                )
 
-            self.video_overlay.setResults(qrreader_res, flip_x)
+            # Call the validator to see if the scanned results are acceptable
+            self.validator_res = self.validator.validate_results(self.qrreader_res)
+
+            # Update the video overlay with the results
+            self.video_overlay.set_results(self.qrreader_res, flip_x, self.validator_res)
+
+            # Close the dialog if the validator accepted the result
+            if self.validator_res.accepted:
+                self.close()
+
+        # Apply the crop blur effect
+        if self.image_effect:
+            frame = self.image_effect.apply(frame)
 
         # If horizontal flipping is enabled, only flip the display
         if flip_x:
@@ -224,14 +274,14 @@ class QrReaderCameraDialog(QDialog):
         # Display the frame in the widget
         self.video_widget.setPixmap(QPixmap.fromImage(frame))
 
-        self.update_stats(qr_scanned)
+        self._update_stats(qr_scanned)
 
-    def init_stats(self):
+    def _init_stats(self):
         self.last_stats_time = time.perf_counter()
         self.frame_counter = 0
         self.qr_frame_counter = 0
 
-    def update_stats(self, qr_scanned):
+    def _update_stats(self, qr_scanned):
         self.frame_counter += 1
         if qr_scanned:
             self.qr_frame_counter += 1
@@ -240,7 +290,8 @@ class QrReaderCameraDialog(QDialog):
         if last_stats_delta > 5.0:
             fps = self.frame_counter / last_stats_delta
             qr_fps = self.qr_frame_counter / last_stats_delta
-            print_error(_('QR code display running at {} FPS, scanner at {} FPS').format(fps, qr_fps))
+            stats_format = _('QR code display running at {} FPS, scanner at {} FPS')
+            print_error(stats_format.format(fps, qr_fps))
             self.frame_counter = 0
             self.qr_frame_counter = 0
             self.last_stats_time = now
