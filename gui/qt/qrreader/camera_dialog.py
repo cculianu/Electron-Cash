@@ -42,7 +42,7 @@ from .video_widget import QrReaderVideoWidget
 from .video_overlay import QrReaderVideoOverlay
 from .video_surface import QrReaderVideoSurface
 from .crop_blur_effect import QrReaderCropBlurEffect
-from .validator import AbstractQrReaderValidator, QrReaderValidatorSingle, QrReaderValidatorResult
+from .validator import AbstractQrReaderValidator, QrReaderValidatorCounted, QrReaderValidatorResult
 
 class QrReaderCameraDialog(QDialog):
     """
@@ -55,17 +55,17 @@ class QrReaderCameraDialog(QDialog):
     # Try to QR scan every QR_SCAN_MODULO frames
     QR_SCAN_MODULO: int = 2
 
-    validator: AbstractQrReaderValidator = None
-    frame_id: int = 0
-    qr_crop: QRect = QRect()
-    qrreader_res: List[QrCodeResult] = []
-    validator_res: QrReaderValidatorResult = None
-    last_stats_time: float = 0.0
-    frame_counter: int = 0
-    qr_frame_counter: int = 0
-
     def __init__(self, parent):
         QDialog.__init__(self, parent=parent)
+
+        self.validator: AbstractQrReaderValidator = None
+        self.frame_id: int = 0
+        self.qr_crop: QRect = None
+        self.qrreader_res: List[QrCodeResult] = []
+        self.validator_res: QrReaderValidatorResult = None
+        self.last_stats_time: float = 0.0
+        self.frame_counter: int = 0
+        self.qr_frame_counter: int = 0
 
         self.config = get_config()
 
@@ -163,7 +163,7 @@ class QrReaderCameraDialog(QDialog):
     def scan(
             self,
             device: str = '',
-            validator: AbstractQrReaderValidator = QrReaderValidatorSingle()
+            validator: AbstractQrReaderValidator = QrReaderValidatorCounted()
         ) -> List[QrCodeResult]:
         """
         Scans a QR code from the given camera device.
@@ -188,6 +188,8 @@ class QrReaderCameraDialog(QDialog):
             raise RuntimeError(_("Cannot start QR scanner, no usable camera found."))
 
         self._init_stats()
+        self.qrreader_res = []
+        self.validator_res = None
 
         camera = QCamera(device_info)
         camera.setViewfinder(self.video_surface)
@@ -227,6 +229,8 @@ class QrReaderCameraDialog(QDialog):
         camera.setViewfinder(None)
         camera.stop()
         camera.unload()
+
+        self.validator = None
 
         print_error(_('QR code scanner closed'))
 

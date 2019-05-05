@@ -31,17 +31,13 @@ QrCodePoint = Tuple[int, int]
 QrCodePointList = List[QrCodePoint]
 
 class QrCodeResult():
-    data: str
-    center: QrCodePoint
-    points: QrCodePointList
-
     """
     A detected QR code.
     """
     def __init__(self, data: str, center: QrCodePoint, points: QrCodePointList):
-        self.data = data
-        self.center = center
-        self.points = points
+        self.data: str = data
+        self.center: QrCodePoint = center
+        self.points: QrCodePointList = points
 
     def __str__(self) -> str:
         return 'data: {} center: {} points: {}'.format(self.data, self.center, self.points)

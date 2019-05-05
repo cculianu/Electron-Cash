@@ -24,3 +24,6 @@
 # SOFTWARE.
 
 from .camera_dialog import QrReaderCameraDialog
+from .validator import (QrReaderValidatorResult, AbstractQrReaderValidator,
+                        QrReaderValidatorCounting, QrReaderValidatorColorizing,
+                        QrReaderValidatorStrong, QrReaderValidatorCounted)
