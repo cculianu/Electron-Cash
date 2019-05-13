@@ -103,8 +103,10 @@ setup(
     },
     packages=[
         'electroncash',
+        'electroncash.qrreaders'
         'electroncash_gui',
         'electroncash_gui.qt',
+        'electroncash_gui.qt.qrreader',
         'electroncash_plugins',
         'electroncash_plugins.audio_modem',
         'electroncash_plugins.cosigner_pool',
