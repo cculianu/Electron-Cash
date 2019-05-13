@@ -30,8 +30,9 @@ from PyQt5.QtGui import QPixmap, QPainter, QPaintEvent, QPen, QPainterPath, QCol
 from PyQt5.QtCore import QRectF, Qt
 
 from electroncash.qrreaders import QrCodeResult
+from electroncash.util import PrintError
 
-class QrReaderVideoWidget(QWidget):
+class QrReaderVideoWidget(PrintError, QWidget):
     """
     Simple widget for drawing a pixmap
     """
@@ -63,6 +64,7 @@ class QrReaderVideoWidget(QWidget):
         if self.USE_BILINEAR_FILTER:
             painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.drawPixmap(self.rect(), self.pixmap, self.pixmap.rect())
+        #self.print_error("PixMap {}x{}, pixelRatio={}, self.pixelRatio={}, self.size={}x{}".format(self.pixmap.width(), self.pixmap.height(), self.pixmap.devicePixelRatio(), self.devicePixelRatioF(), self.width(), self.height()))
 
     def setPixmap(self, pixmap: QPixmap):
         self.pixmap = pixmap

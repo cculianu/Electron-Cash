@@ -32,7 +32,7 @@ from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import QSize, QRect, Qt
 
 from electroncash.i18n import _
-from electroncash.util import print_error
+from electroncash.util import print_error, PrintError
 from electroncash.qrreaders import get_qr_reader
 
 from electroncash_gui.qt.utils import FixedAspectRatioLayout
@@ -41,7 +41,7 @@ from .video_widget import QrReaderVideoWidget
 from .video_surface import QrReaderVideoSurface
 from .crop_blur_effect import QrReaderCropBlurEffect
 
-class QrReaderCameraDialog(QDialog):
+class QrReaderCameraDialog(PrintError, QDialog):
     # Try to crop so we have minimum 512 dimensions
     SCAN_SIZE = 512
 
@@ -185,6 +185,8 @@ class QrReaderCameraDialog(QDialog):
         return ''
 
     def on_frame_available(self, frame: QImage):
+        #self.print_error("Image {}x{}, pixelRatio={}".format(frame.width(), frame.height(), frame.devicePixelRatio()))
+
         self.frame_id += 1
 
         # Only QR scan every QR_SCAN_MODULO frames
