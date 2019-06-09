@@ -31,7 +31,10 @@ def main():
     config = SimpleConfig(config_options, read_user_dir_function = get_user_dir)
 
     gui = ElectrumGui(config)
-    call_later(0.010, gui.main) # this is required for the activity indicator to actually animate. Switch to a direct call if not using activity indicator on Splash2
+    # we don't do an animation for race-cash, so commented out and calling
+    # gui.main() directly
+    #call_later(0.010, gui.main) # this is required for the activity indicator to actually animate. Switch to a direct call if not using activity indicator on Splash2
+    gui.main()  # call gui.main directly for race-cash
 
     _printStats(config_options)  # Prints some startup/debug stats such as Python version and SSL version (this is done in another thread to hopefully not impact startup overhead too much, as importing ssl may be a bit heavy)
 

@@ -244,7 +244,8 @@ class ElectrumGui(PrintError):
         self.window = UIWindow.alloc().initWithFrame_(UIScreen.mainScreen.bounds)
 
         # If this is uncommented, use launch screen with logo and activity animation.
-        NSBundle.mainBundle.loadNibNamed_owner_options_("Splash2",self.window,None)
+        # Commented-out for race-cash
+        #NSBundle.mainBundle.loadNibNamed_owner_options_("Splash2",self.window,None)
 
         # To swith to the 'basic' fake UI launch screen:
         #
