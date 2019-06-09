@@ -261,7 +261,7 @@
                                         <color key="titleColor" red="0.7843137255" green="0.0" blue="0.1764705882" alpha="1" colorSpace="deviceRGB"/>
                                     </state>
                                     <state key="highlighted">
-                                        <color key="titleColor" red="1" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
+                                        <color key="titleColor" red="0.93725490199999995" green="0.67450980390000004" blue="0.68627450980000004" alpha="1" colorSpace="deviceRGB"/>
                                     </state>
                                     <connections>
                                         <action selector="onMaxBut:" destination="-1" eventType="primaryActionTriggered" id="3Ku-Fn-ZzB"/>
