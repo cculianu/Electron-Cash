@@ -21,14 +21,21 @@ StatusSynchronizing = 3
 StatusLagging = 4
 
 
-def StatusColors() -> dict:
-    return {
-        StatusOffline : UIColor.colorWithRed_green_blue_alpha_(255.0/255.0,97.0/255.0,97.0/255.0,1.0),
-        StatusOnline : UIColor.colorWithRed_green_blue_alpha_(187.0/255.0,255.0/255.0,59.0/255.0,1.0),
-        StatusDownloadingHeaders : UIColor.colorWithRed_green_blue_alpha_(255.0/255.0,194.0/255.0,104.0/255.0,1.0),
-        StatusSynchronizing : UIColor.colorWithRed_green_blue_alpha_(104.0/255.0,255.0/255.0,179.0/255.0,1.0),
-        StatusLagging : UIColor.colorInDeviceRGBWithHexString_("#EDFF95"),
-    }
+statusColors = {
+        StatusOffline : utils.uicolor_custom('black'),#colorWithRed_green_blue_alpha_(255.0/255.0,97.0/255.0,97.0/255.0,1.0),
+        StatusOnline : utils.uicolor_custom('white'),#UIColor.colorWithRed_green_blue_alpha_(187.0/255.0,255.0/255.0,59.0/255.0,1.0),
+        StatusDownloadingHeaders : utils.uicolor_custom('light'),
+        StatusSynchronizing : utils.uicolor_custom('salmon'),#UIColor.colorWithRed_green_blue_alpha_(104.0/255.0,255.0/255.0,179.0/255.0,1.0),
+        StatusLagging : UIColor.colorInDeviceRGBWithHexString_("#EDFF95").retain(),
+}
+
+statusFGColors = {
+        StatusOffline : utils.uicolor_custom('white'),#colorWithRed_green_blue_alpha_(255.0/255.0,97.0/255.0,97.0/255.0,1.0),
+        StatusOnline : utils.uicolor_custom('black'),#UIColor.colorWithRed_green_blue_alpha_(187.0/255.0,255.0/255.0,59.0/255.0,1.0),
+        StatusDownloadingHeaders : utils.uicolor_custom('black'),
+        StatusSynchronizing : utils.uicolor_custom('black'),#UIColor.colorWithRed_green_blue_alpha_(104.0/255.0,255.0/255.0,179.0/255.0,1.0),
+        StatusLagging : utils.uicolor_custom('black'),
+}
 
 def VChevronImages() -> list:
     return [
@@ -72,7 +79,7 @@ class WalletsVC(WalletsVCBase):
         self.segControl.font = UIFont.systemFontOfSize_weight_(16.0, UIFontWeightSemibold)
         self.segControl.autoAdjustSelectionIndicatorWidth = False
         # Can't set this property from IB, so we do it here programmatically to create the stroke around the receive button
-        self.receiveBut.layer.borderColor = self.sendBut.backgroundColor.CGColor
+        self.receiveBut.layer.borderColor = self.receiveBut.backgroundColor.CGColor #self.sendBut.backgroundColor.CGColor
 
         gui.ElectrumGui.gui.sigHistory.connect(lambda: self.refresh(), self)
         gui.ElectrumGui.gui.sigRequests.connect(lambda: self.refresh(), self)
@@ -129,13 +136,14 @@ class WalletsVC(WalletsVCBase):
         if self.viewIfLoaded is None or self.statusLabel is None:
             utils.NSLog("WARNING: WalletsVC setStatus on a WalletsVC that is not fully initialized!")
             return
-        c = None
-        statusColors = StatusColors()
         try:
             c = statusColors[mode]
+            fc = statusFGColors[mode]
         except:
             c = statusColors[StatusOffline]
+            fc = statusFGColors[StatusOffline]
         self.statusLabel.backgroundColor = c
+        self.statusLabel.textColor = fc
         if mode == StatusOnline:
             self.statusBlurb.text = _("All set and good to go.")
             self.statusLabel.text = _("Online")

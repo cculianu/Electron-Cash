@@ -793,7 +793,7 @@ class ElectrumGui(PrintError):
 
     def notify(self, message,
                duration=10.0,
-               color=(0.0, .5, .25, 1.0), # deeper green
+               color=utils.uicolor_custom('dark'),
                textColor=UIColor.whiteColor,
                font=UIFont.systemFontOfSize_(12.0),
                style=CWNotificationStyleNavigationBarNotification,

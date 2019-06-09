@@ -139,13 +139,13 @@
             </view>
             <userDefinedRuntimeAttributes>
                 <userDefinedRuntimeAttribute type="color" keyPath="colorTitle">
-                    <color key="value" red="0.80000000000000004" green="0.80000000000000004" blue="0.80000000000000004" alpha="1" colorSpace="deviceRGB"/>
+                    <color key="value" red="0.59999999999999998" green="0.53725490200000003" blue="0.54117647059999996" alpha="1" colorSpace="deviceRGB"/>
                 </userDefinedRuntimeAttribute>
                 <userDefinedRuntimeAttribute type="color" keyPath="colorTitle2">
-                    <color key="value" red="0.33333333329999998" green="0.5450980392" blue="1" alpha="1" colorSpace="deviceRGB"/>
+                    <color key="value" red="0.7843137255" green="0.0" blue="0.1764705882" alpha="1" colorSpace="deviceRGB"/>
                 </userDefinedRuntimeAttribute>
                 <userDefinedRuntimeAttribute type="color" keyPath="colorItems">
-                    <color key="value" red="0.25490196079999999" green="0.25490196079999999" blue="0.25490196079999999" alpha="1" colorSpace="deviceRGB"/>
+                    <color key="value" red="0.086274509799999996" green="0.10980392160000001" blue="0.086274509799999996" alpha="1" colorSpace="deviceRGB"/>
                 </userDefinedRuntimeAttribute>
             </userDefinedRuntimeAttributes>
             <connections>

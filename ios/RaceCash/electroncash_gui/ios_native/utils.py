@@ -136,17 +136,20 @@ def uicolor_custom(name : str) -> ObjCInstance:
     if not _ColorScheme:
         # initialize it on first call. We don't initialize it on initial module load to shave a few mss off app loading time.
         _ColorScheme = {
-            'dark'      : UIColor.colorInDeviceRGBWithHexString_("#161C16").retain(),  # Changed for racecash, alternate text color
-            'light'     : UIColor.colorInDeviceRGBWithHexString_("#aaaaaa").retain(),  # Changed for racecash.. normal text color
-            'ultralight': UIColor.colorInDeviceRGBWithHexString_("#CCCCCC").retain(),  # Changed for racecash
+            'black'     : UIColor.colorInDeviceRGBWithHexString_("#161C16").retain(),  # Changed for racecash,
+            'dark'      : UIColor.colorInDeviceRGBWithHexString_("#161C16").retain(),  # Changed for racecash, 'race cash black'
+            'medium'    : UIColor.colorInDeviceRGBWithHexString_("#99898a").retain(),
+            'light'     : UIColor.colorInDeviceRGBWithHexString_("#aaaaaa").retain(),  # Changed for racecash..
+            'ultralight': UIColor.colorInDeviceRGBWithHexString_("#f6f6f6").retain(),  # Changed for racecash
             'nav'       : UIColor.colorInDeviceRGBWithHexString_("#C8002D").retain(),  # Changed for racecash, nav color red
             'link'      : UIColor.colorInDeviceRGBWithHexString_("#C8002D").retain(),  # Same as nav color
-            'linktapped': UIColor.colorInDeviceRGBWithHexString_("#FF8BFF").retain(),
+            'linktapped': UIColor.colorInDeviceRGBWithHexString_("#EFACAF").retain(),
             'navtint'   : UIColor.colorInDeviceRGBWithHexString_("#FFFFFF").retain(),
             'red'       : UIColor.colorInDeviceRGBWithHexString_("#C8002D").retain(), # Changed for Race Cash ("#FF6161").retain(),
-            'notif'     : UIColor.colorInDeviceRGBWithHexString_("#000000").retain(), # Changed for Race Cash, black # was: very bright green "#BBFF3B"
+            'notif'     : UIColor.colorInDeviceRGBWithHexString_("#161c16").retain(), # Changed for Race Cash, black # was: very bright green "#BBFF3B"
             'white'     : UIColor.colorInDeviceRGBWithHexString_("#FFFFFF").retain(), # Added for Race Cash, the white.
-            'green'     : UIColor.colorInDeviceRGBWithHexString_("#33C33D").retain(), # Changed for Race Cash ("#9BDF1B").retain(), # less bright green
+            'green'     : UIColor.colorInDeviceRGBWithHexString_("#67AD21").retain(), # Changed for Race Cash ("#9BDF1B").retain(), # less bright green
+            'salmon'    : UIColor.colorInDeviceRGBWithHexString_("#EFACAF").retain(),
         }
     schemecolor = _ColorScheme.get(name, None)
     if schemecolor:

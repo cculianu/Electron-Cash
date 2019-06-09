@@ -451,7 +451,7 @@ class AddressesVC(AddressesVCBase):
                 fiatColor = utils.uicolor_custom('frozentextlight')
             else:
                 amtColor = utils.uicolor_custom('dark')
-                fiatColor = utils.uicolor_custom('light')
+                fiatColor = utils.uicolor_custom('medium')
             cell.balance.attributedText = utils.hackyFiatAmtAttrStr(baltxt, entry.fiat_balance_str, '', 0.0, fiatColor, None, -0.5, amtColor = amtColor)
             xtra = []
             if entry.is_frozen:
