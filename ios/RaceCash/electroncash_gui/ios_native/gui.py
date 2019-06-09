@@ -158,8 +158,8 @@ class ElectrumGui(PrintError):
 
     def __init__(self, config):
         ElectrumGui.gui = self
-        self.appName = 'Electron-Cash'
-        self.appDomain = 'com.c3-soft.ElectronCash'
+        self.appName = 'Race-Cash'
+        self.appDomain = 'com.race-cap.RaceCash'
         self.set_language()
 
         # Signals mechanism for publishing data to interested components asynchronously -- see self.refresh_components()
