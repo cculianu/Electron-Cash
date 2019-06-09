@@ -17,6 +17,7 @@
             <subviews>
                 <label opaque="NO" userInteractionEnabled="NO" tag="1" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" horizontalCompressionResistancePriority="1000" text="This is a label bla bla bla" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" minimumScaleFactor="0.5" translatesAutoresizingMaskIntoConstraints="NO" id="imA-Jl-ydM">
                     <rect key="frame" x="113.5" y="16" width="148" height="18"/>
+                    <color key="tintColor" red="0.7843137255" green="0.0" blue="0.1764705882" alpha="1" colorSpace="deviceRGB"/>
                     <constraints>
                         <constraint firstAttribute="width" relation="greaterThanOrEqual" id="Ao9-XJ-JeA"/>
                         <constraint firstAttribute="height" constant="18" id="czr-Da-2lk"/>
