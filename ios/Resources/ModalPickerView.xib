@@ -35,7 +35,7 @@
                         </pickerView>
                         <button opaque="NO" clearsContextBeforeDrawing="NO" tag="1" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Vv1-jj-Enk">
                             <rect key="frame" x="15" y="216" width="260" height="44"/>
-                            <color key="backgroundColor" red="0.086274509799999996" green="0.10980392160000001" blue="0.086274509799999996" alpha="1" colorSpace="deviceRGB"/>
+                            <color key="backgroundColor" red="0.7843137255" green="0.0" blue="0.1764705882" alpha="1" colorSpace="deviceRGB"/>
                             <rect key="contentStretch" x="0.0" y="0.0" width="1" height="0.0"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="44" id="A64-S9-5gg"/>
