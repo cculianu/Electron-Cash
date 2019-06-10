@@ -1,8 +1,8 @@
-Electron-Cash, iOS Native UI
+Race Cash, iOS Native UI
 ============================
 
-This subdirectory implements an iOS native UI for Electron Cash, using UIKit via
-'rubicon-ios' Python bindings. It uses the 'Briefcase' project to create an Xcode project which contains within it a Python interpreter, plus all scripts and dependent python packages.  Python 3.6 or above is recommended.
+This subdirectory implements an iOS native UI for Race Cash, using UIKit via
+'rubicon-ios' Python bindings. It uses the 'Briefcase' project to create an Xcode project which contains within it a Python interpreter, plus all scripts and dependent python packages.  Python 3.6 is recommended.
 
 - Rubicon-iOS Web Page: https://pybee.org/project/projects/bridges/rubicon/
 - Briefcase Web Page: https://pybee.org/project/projects/tools/briefcase/
@@ -51,5 +51,5 @@ For more information, see this stackoverflow post: https://stackoverflow.com/que
 
 Additional Notes
 ----------------
-The app built by this Xcode project is a fully running standalone Electron Cash as an iPhone app.  It pulls in sources from ../lib and other places when generating the Xcode project, but everything that is needed (.py files, Python interpreter, etc) ends up packaged in the generated iOS .app!
+The app built by this Xcode project is a fully running standalone Race Cash as an iPhone app.  It pulls in sources from ../lib and other places when generating the Xcode project, but everything that is needed (.py files, Python interpreter, etc) ends up packaged in the generated iOS .app!
 
