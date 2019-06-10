@@ -22,7 +22,7 @@ issue_template = """<font face=arial color="#414141">
 
 <h2>Additional information</h2>
 <ul>
-  <li>Electron Cash version: {app_version}</li>
+  <li>Race Cash version: {app_version}</li>
   <li>Python version: {python_version}</li>
   <li>Operating system: {os}</li>
   <li>Wallet type: {wallet_type}</li>
@@ -38,14 +38,14 @@ report_server = "https://crashhub.electroncash.org/crash"
 Singleton = None
 
 class CrashReporterVC(CrashReporterBase):
-    
+
     @objc_method
     def dealloc(self) -> None:
         global Singleton
         Singleton = None
         utils.nspy_pop(self)
         send_super(__class__, self, 'dealloc')
-        
+
     @objc_method
     def viewDidLoad(self) -> None:
         send_super(__class__, self, 'viewDidLoad')
@@ -55,16 +55,16 @@ class CrashReporterVC(CrashReporterBase):
         self.reportTit.setText_withKerning_(_("Report Contents"), utils._kern)
         self.descTit.setText_withKerning_(_("Please briefly describe what led to the error (optional):").translate({ord(':'):None}), utils._kern)
         utils.uilabel_replace_attributed_text(self.errMsg,
-                                               _('Sorry!')  + " " + _('Something went wrong running Electron Cash.') + " " + _('To help us diagnose and fix the problem, you can send us a bug report that contains useful debug information:').translate({ord(':'):None}),
+                                               _('Sorry!')  + " " + _('Something went wrong running Race Cash.') + " " + _('To help us diagnose and fix the problem, you can send us a bug report that contains useful debug information:').translate({ord(':'):None}),
                                                font = UIFont.italicSystemFontOfSize_(12.0)
                                               )
         self.descDel.placeholderFont = UIFont.italicSystemFontOfSize_(14.0)
         self.descDel.font = UIFont.systemFontOfSize_(14.0)
         self.descDel.placeholderText = _('Tap to enter text...')
         self.descDel.text = ""
-        
+
         self.title = _('Crash Reporter')
-        
+
     @objc_method
     def viewWillAppear_(self, animated : bool) -> None:
         send_super(__class__, self, 'viewWillAppear:', animated, argtypes=[c_bool])
@@ -90,7 +90,7 @@ class CrashReporterVC(CrashReporterBase):
             self.sendBut.setEnabled_(True)
             utils.uiview_set_enabled(self.sendBut, True)
 
-        
+
     @objc_method
     def onSendBut_(self, sender) -> None:
         def SendReport() -> str:
@@ -115,7 +115,7 @@ class CrashReporterVC(CrashReporterBase):
             parent().show_error(message = str(exc[1]), vc = self)
 
         utils.WaitingDialog(self, _("Sending Report..."), SendReport,  OnSuccess, OnError)
-        
+
 def _Get(vc: CrashReporterVC) -> tuple:
     return utils.nspy_get_byname(vc, 'exc_info')
 
@@ -178,7 +178,7 @@ def Test():
     import time
     def duh() -> None:
         raise Exception("A random exception!!")
-    
+
     utils.call_later(2.0, duh)
     utils.call_later(3.0, duh)
     #utils.call_later(10.0, duh)
@@ -195,7 +195,7 @@ def Test():
                 raise Exception("From another thread!!")
             finally:
                 th = None
-        
+
         import threading
         th = threading.Thread(target=thrd, name="Exception thread...", daemon=True)
         th.start()

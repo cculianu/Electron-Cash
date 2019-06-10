@@ -41,7 +41,7 @@
                                                 </constraints>
                                                 <attributedString key="attributedText">
                                                     <fragment>
-                                                        <string key="content">Sorry! Something went wrong running Electron Cash. To help us diagnore the problem, you can send a bug report that contains useful debug information:</string>
+                                                        <string key="content">Sorry! Something went wrong running Race Cash. To help us diagnore the problem, you can send a bug report that contains useful debug information:</string>
                                                         <attributes>
                                                             <color key="NSColor" red="0.59999999999999998" green="0.53725490200000003" blue="0.54117647059999996" alpha="1" colorSpace="deviceRGB"/>
                                                             <font key="NSFont" metaFont="cellTitle"/>

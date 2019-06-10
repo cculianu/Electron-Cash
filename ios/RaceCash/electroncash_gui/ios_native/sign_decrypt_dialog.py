@@ -24,10 +24,10 @@ SignVerify = 0
 EncryptDecrypt = 1
 
 class SignDecryptVC(SignDecryptBase):
-    
+
     mode = objc_property()
     kbas = objc_property()
-    
+
     @objc_method
     def initWithMode_(self, mode : int) -> ObjCInstance:
         self = ObjCInstance(send_super(__class__, self, 'init'))
@@ -37,7 +37,7 @@ class SignDecryptVC(SignDecryptBase):
         self.title = _("Sign/Verify Message") if mode == SignVerify else _("Encrypt/Decrypt Message")
         self.mode = mode
         return self
-    
+
     @objc_method
     def dealloc(self) -> None:
         #print("PrivateKeyDialog dealloc")
@@ -45,13 +45,13 @@ class SignDecryptVC(SignDecryptBase):
         self.mode = None
         self.kbas = None
         send_super(__class__, self, 'dealloc')
-    
+
     @objc_method
     def loadView(self) -> None:
         NSBundle.mainBundle.loadNibNamed_owner_options_("SignVerify",self,None)
 
         data = utils.nspy_get_byname(self, 'data')
-        
+
         # Can't set this property from IB, so we do it here programmatically to create the stroke around the button
         self.butRight.layer.borderColor = utils.uicolor_custom('nav').CGColor
 
@@ -62,21 +62,21 @@ class SignDecryptVC(SignDecryptBase):
         toolBar.sizeToFit()
         toolBar.items = [spacer, item]
         self.tf.inputAccessoryView = toolBar
-    
+
         self.tf.delegate = self
-                
+
     @objc_method
     def textFieldDidEndEditing_(self, tf) -> None:
         utils.uitf_redo_attrs(tf)
-        
+
     @objc_method
     def viewWillAppear_(self, animated : bool) -> None:
         send_super(__class__, self, 'viewWillAppear:', animated, argtypes=[c_bool])
         self.refresh()
         parent().cash_addr_sig.connect(lambda: self.refresh(), self)
         self.kbas = utils.register_keyboard_autoscroll(self.view)
-        
-        
+
+
     @objc_method
     def viewWillDisappear_(self, animated : bool) -> None:
         send_super(__class__, self, 'viewWillDisappear:', animated, argtypes=[c_bool])
@@ -96,12 +96,12 @@ class SignDecryptVC(SignDecryptBase):
         if self.kbas:
             utils.unregister_keyboard_autoscroll(self.kbas)
             self.kbas = None
-        
+
     @objc_method
     def refresh(self) -> None:
         if not self.viewIfLoaded or not parent().wallet: return
         data = utils.nspy_get_byname(self, 'data')
-        
+
         strings = [
             [
                 "Message",
@@ -118,7 +118,7 @@ class SignDecryptVC(SignDecryptBase):
                 "Decrypt",
             ],
         ]
-  
+
         mode = self.mode
         watch_only = parent().wallet.is_watching_only()
         if watch_only:
@@ -131,10 +131,10 @@ class SignDecryptVC(SignDecryptBase):
         else:
             self.butLeft.enabled = True
             self.butRight.enabled = True
-        utils.uiview_set_enabled(self.butLeft, self.butLeft.isEnabled())   
-        utils.uiview_set_enabled(self.butRight, self.butRight.isEnabled())   
+        utils.uiview_set_enabled(self.butLeft, self.butLeft.isEnabled())
+        utils.uiview_set_enabled(self.butRight, self.butRight.isEnabled())
 
-        
+
         lbl = self.midTit
         lbl.setText_withKerning_( _(strings[mode][1]), utils._kern )
         tf = self.tf
@@ -163,13 +163,13 @@ class SignDecryptVC(SignDecryptBase):
         tvDel.placeholderText = _("Tap to enter text...")
         if not tvDel.text: tvDel.text = ''
 
-        
+
         but = self.butLeft
         but.setTitle_forState_(_(strings[mode][3]),UIControlStateNormal)
         but = self.butRight
         but.setTitle_forState_(_(strings[mode][4]),UIControlStateNormal)
 
-        
+
     @objc_method
     def onCpyBut_(self, sender : ObjCInstance) -> None:
         def DoIt() -> None:
@@ -182,7 +182,7 @@ class SignDecryptVC(SignDecryptBase):
                     parent().copy_to_clipboard(data)
         utils.boilerplate.vc_highlight_button_then_do(self, sender, DoIt)
 
-        
+
     @objc_method
     def onPickAddress_(self, sender : ObjCInstance) -> None:
         def DoIt() -> None:
@@ -238,7 +238,7 @@ class SignDecryptVC(SignDecryptBase):
                         "private key, and verifying with the corresponding public key. The "
                         "address you have entered does not have a unique public key, so these "
                         "operations cannot be performed.") + '\n\n' + \
-                       _('The operation is undefined. Not just in Electron Cash, but in general.')
+                       _('The operation is undefined. Not just in Race Cash, but in general.')
             parent().show_message(_('Cannot sign messages with this type of address.') + '\n\n' + msg_sign)
             return
         if not parent().wallet:
@@ -249,7 +249,7 @@ class SignDecryptVC(SignDecryptBase):
         if not parent().wallet.is_mine(addr):
             parent().show_message(_('Address not in wallet.'))
             return
-        
+
         def onPw(password : str) -> None:
             try:
                 signed = parent().wallet.sign_message(addr, message, password)
@@ -260,18 +260,18 @@ class SignDecryptVC(SignDecryptBase):
             parent().show_message(_("The signature for the provided message has been pasted into the signature text box."),title=_("Success"))
 
         parent().prompt_password_if_needed_asynch(onPw, vc = self)
-    
+
     @objc_method
     def doVerify(self) -> None:
         addrtf = self.tf
         address_str = str(addrtf.text).strip()
         message = str(self.topTvDel.text)
         signature = str(self.botTvDel.text).strip()
-        
+
         if not signature:
             parent().show_message(_("Please provide both a signature and a message to verify"))
             return
-        
+
         try:
             address = Address.from_string(address_str)
         except:
@@ -289,18 +289,18 @@ class SignDecryptVC(SignDecryptBase):
             parent().show_message(_("Signature verified"), title=_("Success"))
         else:
             parent().show_error(_("Wrong signature"))
-    
+
     @objc_method
     def doEncrypt(self) -> None:
         message = self.topTvDel.text
         message = message.encode('utf-8')
         pubkey = self.tf.text.strip()
         encryptedTVDel = self.botTvDel
-        
+
         if not pubkey:
             parent().show_message(_("Please provide a public key or select an address"))
             return
-        
+
         try:
             encrypted = bitcoin.encrypt_message(message, pubkey)
             encryptedTVDel.text = str(encrypted.decode('ascii'))
@@ -308,25 +308,25 @@ class SignDecryptVC(SignDecryptBase):
             traceback.print_exc(file=sys.stdout)
             parent().show_error(str(e))
 
-    
+
     @objc_method
     def doDecrypt(self) -> None:
         if not parent().wallet: return
         if parent().wallet.is_watching_only():
             parent().show_message(_('This is a watching-only wallet.'))
             return
-        
+
         cyphertext = self.botTvDel.text
         pubkey = self.tf.text.strip()
-        
+
         if not cyphertext:
             parent().show_message(_("Please provide cyphertext to decrypt"))
             return
-        
+
         if not pubkey:
             parent().show_message(_("Please provide a public key to use for decryption"))
-            return            
-        
+            return
+
         def onPw(password: str) -> None:
             try:
                 plaintext = parent().wallet.decrypt_message(pubkey, cyphertext, password)
@@ -341,7 +341,7 @@ class SignDecryptVC(SignDecryptBase):
                 return
             self.topTvDel.text = plaintext
             parent().show_message(_("The message has been successfully decrypted"), title=_("Success"))
-        parent().prompt_password_if_needed_asynch(onPw, vc = self) 
+        parent().prompt_password_if_needed_asynch(onPw, vc = self)
 
 def Create_SignVerify_VC(address, pubkey = None) -> ObjCInstance:
     vc = SignDecryptVC.alloc()

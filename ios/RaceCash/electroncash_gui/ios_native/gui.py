@@ -1416,7 +1416,7 @@ class ElectrumGui(PrintError):
             self._no_wallet()
             self.refresh_all()
             self.show_message(title = _("Disk Space Low"),
-                              message = _("Electron Cash cannot proceed because this device is very low on disk space. Please free up some disk space and try again."))
+                              message = _("Race Cash cannot proceed because this device is very low on disk space. Please free up some disk space and try again."))
             return True
         return False
 
@@ -2227,7 +2227,7 @@ class ElectrumGui(PrintError):
         except:
             import traceback
             traceback.print_exc(file=sys.stderr)
-            self.show_error(_("Electron Cash was unable to parse your transaction"))
+            self.show_error(_("Race Cash was unable to parse your transaction"))
         return False
 
     def present_on_boarding_wizard_if_needed(self) -> ObjCInstance:
