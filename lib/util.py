@@ -359,7 +359,7 @@ def assert_datadir_available(config_path):
         return
     else:
         raise FileNotFoundError(
-            'Electron Cash datadir does not exist. Was it deleted while running?' + '\n' +
+            'Race Cash datadir does not exist. Was it deleted while running?' + '\n' +
             'Should be at {}'.format(path))
 
 def assert_file_in_datadir_available(path, config_path):
