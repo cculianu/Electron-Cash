@@ -53,7 +53,7 @@ class SignDecryptVC(SignDecryptBase):
         data = utils.nspy_get_byname(self, 'data')
 
         # Can't set this property from IB, so we do it here programmatically to create the stroke around the button
-        self.butRight.layer.borderColor = utils.uicolor_custom('nav').CGColor
+        #self.butRight.layer.borderColor = utils.uicolor_custom('nav').CGColor
 
         spacer = UIBarButtonItem.alloc().initWithBarButtonSystemItem_target_action_(UIBarButtonSystemItemFlexibleSpace, None, None).autorelease()
         item = UIBarButtonItem.alloc().initWithBarButtonSystemItem_target_action_(UIBarButtonSystemItemDone, self, SEL(b'onCloseKeyboard:')).autorelease()

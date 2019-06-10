@@ -165,7 +165,12 @@ class PWChangeVC(UIViewController):
                 a.placeholder = new if new != old else newcolon
             elif isinstance(a, UIButton):
                 a.setTitle_forState_(_(a.titleForState_(UIControlStateNormal)), UIControlStateNormal)
-                a.layer.borderColor = utils.uicolor_custom('nav').CGColor
+                if a.tag == 1000:
+                    # the OK button on the right gets a black border
+                    a.layer.borderColor = utils.uicolor_custom('black').CGColor
+                else:
+                    # the Cancel button on th left gets a red border
+                    a.layer.borderColor = utils.uicolor_custom('nav').CGColor
         msgLbl = v.viewWithTag_(20)
         msgLbl.text = msg
         utils.uiview_set_enabled(v.viewWithTag_(100), has_pw)

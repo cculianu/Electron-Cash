@@ -59,7 +59,7 @@
                 </label>
                 <button opaque="NO" tag="1000" contentMode="scaleToFill" horizontalCompressionResistancePriority="1000" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="hcv-1d-5WE">
                     <rect key="frame" x="0.0" y="390" width="320" height="30"/>
-                    <color key="backgroundColor" red="0.7843137255" green="0.0" blue="0.1764705882" alpha="1" colorSpace="deviceRGB"/>
+                    <color key="backgroundColor" red="0.086274509799999996" green="0.10980392160000001" blue="0.086274509799999996" alpha="1" colorSpace="deviceRGB"/>
                     <constraints>
                         <constraint firstAttribute="height" constant="30" id="WJy-mK-K9T"/>
                     </constraints>
