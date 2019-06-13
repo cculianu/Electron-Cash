@@ -10,4 +10,4 @@
 # 2. Make sure overrides/ElectronCash gets renamed to exactly match compact_name!
 
 compact_name="RaceCash"
-xcode_target="Race-Cash"
+xcode_target="RACE-CASH"

@@ -145,10 +145,10 @@ def uicolor_custom(name : str) -> ObjCInstance:
             'link'      : UIColor.colorInDeviceRGBWithHexString_("#C8002D").retain(),  # Same as nav color
             'linktapped': UIColor.colorInDeviceRGBWithHexString_("#EFACAF").retain(),
             'navtint'   : UIColor.colorInDeviceRGBWithHexString_("#FFFFFF").retain(),
-            'red'       : UIColor.colorInDeviceRGBWithHexString_("#C8002D").retain(), # Changed for Race Cash ("#FF6161").retain(),
-            'notif'     : UIColor.colorInDeviceRGBWithHexString_("#161c16").retain(), # Changed for Race Cash, black # was: very bright green "#BBFF3B"
-            'white'     : UIColor.colorInDeviceRGBWithHexString_("#FFFFFF").retain(), # Added for Race Cash, the white.
-            'green'     : UIColor.colorInDeviceRGBWithHexString_("#67AD21").retain(), # Changed for Race Cash ("#9BDF1B").retain(), # less bright green
+            'red'       : UIColor.colorInDeviceRGBWithHexString_("#C8002D").retain(), # Changed for RACE-CASH ("#FF6161").retain(),
+            'notif'     : UIColor.colorInDeviceRGBWithHexString_("#161c16").retain(), # Changed for RACE-CASH, black # was: very bright green "#BBFF3B"
+            'white'     : UIColor.colorInDeviceRGBWithHexString_("#FFFFFF").retain(), # Added for RACE-CASH, the white.
+            'green'     : UIColor.colorInDeviceRGBWithHexString_("#67AD21").retain(), # Changed for RACE-CASH ("#9BDF1B").retain(), # less bright green
             'salmon'    : UIColor.colorInDeviceRGBWithHexString_("#EFACAF").retain(),
         }
     schemecolor = _ColorScheme.get(name, None)

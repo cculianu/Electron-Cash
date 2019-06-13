@@ -490,17 +490,17 @@ def showHelpForButton(oid : objc_id) -> None:
     msg = _("Unknown")
     if tag is TAG_HELP_STATUS:
         msg = ' '.join([
-            _("Race Cash connects to several nodes in order to download block headers and find out the longest blockchain."),
+            _("RACE-CASH connects to several nodes in order to download block headers and find out the longest blockchain."),
             _("This blockchain is used to verify the transactions sent by your transaction server.")
         ])
     elif tag is TAG_HELP_SERVER:
-        msg = _("Race Cash sends your wallet addresses to a single server, in order to receive your transaction history.")
+        msg = _("RACE-CASH sends your wallet addresses to a single server, in order to receive your transaction history.")
     elif tag is TAG_HELP_BLOCKCHAIN:
         msg = _('This is the height of your local copy of the blockchain.')
     elif tag is TAG_HELP_AUTOSERVER:
         msg = ' '.join([
-            _("If auto-connect is enabled, Race Cash will always use a server that is on the longest blockchain."),
-            _("If it is disabled, you have to choose a server you want to use. Race Cash will warn you if your server is lagging.")
+            _("If auto-connect is enabled, RACE-CASH will always use a server that is on the longest blockchain."),
+            _("If it is disabled, you have to choose a server you want to use. RACE-CASH will warn you if your server is lagging.")
         ])
-    msg = msg.replace("Electrum","Race Cash")
+    msg = msg.replace("Electrum","RACE-CASH")
     parent().show_message(msg, title = _("Information"))
