@@ -305,7 +305,8 @@ class PayToEdit(PrintError, ScanQRTextEdit):
                 # TODO: update fee
         super(PayToEdit,self).qr_input(_on_qr_success)
 
-    def resolve(self):
+    def _resolve_open_alias(self):
+        prev_vals = self.is_alias, self.validated  # used only if early return due to unchanged text below
         self.is_alias, self.validated = False, False
         if self.hasFocus():
             return
@@ -316,9 +317,12 @@ class PayToEdit(PrintError, ScanQRTextEdit):
         key = str(self.toPlainText())
         key = key.strip()  # strip whitespaces
         if key == self.previous_payto:
-            return
+            # unchanged, restore previous state, abort early.
+            self.is_alias, self.validated = prev_vals
+            return self.is_alias
         self.previous_payto = key
-        if not (('.' in key) and (not '<' in key) and (not ' ' in key)):
+        if '.' not in key or '<' in key or ' ' in key:
+            # not an openalias or an openalias with extra info in it, bail..!
             return
         parts = key.split(sep=',')  # assuming single line
         if parts and len(parts) > 0 and Address.is_valid(parts[0]):
@@ -362,3 +366,43 @@ class PayToEdit(PrintError, ScanQRTextEdit):
             self.setGreen()
         else:
             self.setExpired()
+
+        return True
+
+    def _resolve_cash_accounts(self):
+        ''' This should be called if not hasFocus(). Will run through the
+        text in the payto and rewrite any verified cash accounts we find. '''
+
+
+    def resolve(self):
+        ''' This is called by the main window periodically from a timer. See
+        main_window.py function `timer_actions`.
+
+        It will resolve OpenAliases in the send tab and will also alternatively
+        resolve Cash Accounts by attempting to verify them in the background
+        and rewriting the payto field with completed information.
+
+        Note that OpenAlias is assumed to be a single-line payto. Also note
+        that OpenAlias blocks the GUI thread whereas Cash Accounts does not.
+
+        Cash Accounts supports full multiline with mixed address/cash accounts
+        in the payto.
+
+        OpenAlias and other payto types are mutually exclusive (that is, if
+        OpenAlias, you are such with 1 payee which is OpenAlias).
+
+        Note that this mechanism was piggy-backed onto code we inherited from
+        Electrum.  It's my opinion that this mechanism is a bit complex for what
+        it is since it requires the progremmer to spend considerable time
+        reading this code to modfy/enhance it.  But we will work with that
+        we have for now. -Calin '''
+        if self._resolve_open_alias():
+            # it was an openalias -- abort and don't proceed to cash account
+            # resolve
+            return
+        if self.hasFocus() or self.is_pr:
+            # PR by definition can't proceed, and we also don't proceed if
+            # user is still editing.
+            return
+
+        self._resolve_cash_accounts()
