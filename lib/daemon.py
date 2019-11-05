@@ -69,7 +69,8 @@ def get_fd_or_server(config):
             ret = os.open(lockfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644), None
             # New: No sense in keeping the file around. It causes problems on
             # some Linux where jsonrpc goes out to lunch truing to contact the
-            # non-existing daemon.
+            # non-existing daemon.  Note that if we os.fork() from this point
+            # forward, we must now use os._exit in the exiting process!
             #
             # See: https://github.com/joshmarshall/jsonrpclib/issues/12
             #

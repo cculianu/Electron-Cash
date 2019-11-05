@@ -418,7 +418,7 @@ if __name__ == '__main__':
                     pid = os.fork()
                     if pid:
                         print_stderr("starting daemon (PID %d)" % pid)
-                        sys.exit(0)
+                        os._exit(0)
                 init_plugins(config, 'cmdline')
                 d = daemon.Daemon(config, fd, False)
                 d.start()
