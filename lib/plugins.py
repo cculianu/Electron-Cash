@@ -22,7 +22,7 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import codecs
 import traceback
 import os
@@ -43,8 +43,7 @@ from . import version
 from enum import IntEnum
 
 plugin_loaders = {}
-hook_names = set()
-hooks = {}
+hooks = defaultdict(list)
 
 
 class ExternalPluginCodes(IntEnum):
@@ -483,8 +482,11 @@ class Plugins(DaemonThread):
 
 
 def hook(func):
-    hook_names.add(func.__name__)
+    func._is_ec_plugin_hook = True
     return func
+
+def is_hook(func):
+    return bool(callable(func) and getattr(func, '_is_ec_plugin_hook', False))
 
 def run_hook(name, *args):
     f_list = hooks.get(name)
@@ -514,12 +516,13 @@ class BasePlugin(PrintError):
         self.name = name
         self.config = config
         self.wallet = None
+        self._hooks_i_registered = []
         # add self to hooks
-        for k in dir(self):
-            if k in hook_names:
-                l = hooks.get(k, [])
-                l.append((self, getattr(self, k)))
-                hooks[k] = l
+        for aname in dir(self):
+            func = getattr(self, aname, None)
+            if is_hook(func):
+                hooks[aname].append((self, func))
+                self._hooks_i_registered.append((aname,func))
 
     def set_enabled_prefix(self, prefix):
         # This is set via a method in order not to break the existing API.
@@ -533,11 +536,13 @@ class BasePlugin(PrintError):
 
     def close(self):
         # remove self from hooks
-        for k in dir(self):
-            if k in hook_names:
-                l = hooks.get(k, [])
-                l.remove((self, getattr(self, k)))
-                hooks[k] = l
+        for name, func in self._hooks_i_registered:
+            l = hooks.get(name, [])
+            try: l.remove((self, func))
+            except ValueError: pass  # this should never happen but it pays to be paranoid.
+            if not l:
+                hooks.pop(name, None)
+        self._hooks_i_registered.clear()  # just to kill strong refs to self ASAP, for GC
         self.parent.close_plugin(self)
         self.on_close()
 
