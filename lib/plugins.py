@@ -41,6 +41,7 @@ from .util import profiler, PrintError, DaemonThread, UserCancelled, ThreadJob
 from . import bitcoin
 from . import version
 from enum import IntEnum
+from typing import Callable, Optional
 
 plugin_loaders = {}
 hooks = defaultdict(list)
@@ -485,8 +486,20 @@ def hook(func):
     func._is_ec_plugin_hook = True
     return func
 
-def is_hook(func):
-    return bool(callable(func) and getattr(func, '_is_ec_plugin_hook', False))
+def _get_func_if_hook(plugin, attr_name) -> Optional[Callable]:
+    cls = plugin.__class__
+    cls_attr = getattr(cls, attr_name, None)
+    if isinstance(cls_attr, property):
+        # The queried attr_name corresponds to an instance property. We avoid
+        # calling getattr on instance properties below (since that has side
+        # effects). Just return None as that's the answer
+        return
+    # Ok, attr_name wasn't a property. So it's safe to call getattr on it to
+    # figure out if it's a function, and if so, if it has the special
+    # _is_ec_plugin_hook attribute we may have tagged it with in @hook
+    func = getattr(plugin, attr_name, None)
+    if callable(func) and getattr(func, '_is_ec_plugin_hook', False):
+        return func
 
 def run_hook(name, *args):
     f_list = hooks.get(name)
@@ -519,8 +532,8 @@ class BasePlugin(PrintError):
         self._hooks_i_registered = []
         # add self to hooks
         for aname in dir(self):
-            func = getattr(self, aname, None)
-            if is_hook(func):
+            func = _get_func_if_hook(self, aname)
+            if func is not None:
                 hooks[aname].append((self, func))
                 self._hooks_i_registered.append((aname,func))
 
