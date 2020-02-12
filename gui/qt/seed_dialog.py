@@ -183,16 +183,20 @@ class SeedLayout(QVBoxLayout):
         text = self.seed_e.text()
         return ' '.join(text.split())
 
+    _mnem = None
     def on_edit(self):
-        from electroncash.bitcoin import seed_type
+        from electroncash.mnemonic import seed_type_name, Mnemonic
+        if not self._mnem:
+            # cache the lang wordlist so it doesn't need to get loaded each time.
+            # This speeds up seed_type_name and Mnemonic.is_checksum_valid
+            self._mnem = Mnemonic('en')
         s = self.get_seed()
         b = self.is_seed(s)
         if not self.is_bip39:
-            t = seed_type(s)
+            t = seed_type_name(s)
             label = _('Seed Type') + ': ' + t if t else ''
         else:
-            from electroncash.keystore import bip39_is_checksum_valid
-            is_checksum, is_wordlist = bip39_is_checksum_valid(s)
+            is_checksum, is_wordlist = self._mnem.is_checksum_valid(s)
             status = ('checksum: ' + ('ok' if is_checksum else 'failed')) if is_wordlist else 'unknown wordlist'
             label = 'BIP39' + ' (%s)'%status
         self.seed_type_label.setText(label)
