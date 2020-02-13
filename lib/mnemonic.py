@@ -187,6 +187,16 @@ def seed_type(seed: str) -> Optional[SeedType]:
 def seed_type_name(seed: str) -> str:
     return seed_type_names.get(seed_type(seed), '')
 
+def format_seed_type_name_for_ui(name : str) -> str:
+    """ Given a seed type name e.g. bip39 or standard, transforms it to a
+    canonical UI string "BIP39" or "Electrum" """
+    name = name.strip().lower()  # paranoia
+    name = seed_type_names.get(seed_type_names_inv.get(name)) or name  # transforms 'standard' -> 'electrum'
+    if name == 'bip39':
+        return name.upper()
+    else:
+        return name.title()  # Title Caps for "Old" and "Electrum"
+
 is_seed = lambda x: seed_type(x) is not None
 
 

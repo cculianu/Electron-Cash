@@ -320,7 +320,7 @@ class BaseWizard(util.PrintError):
         self.restore_seed_dialog(run_next=self.on_restore_seed, test=test)
 
     def on_restore_seed(self, seed, is_bip39, is_ext):
-        self.seed_type = 'bip39' if is_bip39 else mnemonic.seed_type_name(seed)
+        self.seed_type = 'bip39' if is_bip39 else mnemonic.seed_type_name(seed)  # NB: seed_type_name here may also auto-detect 'bip39'
         if self.seed_type == 'bip39':
             f=lambda passphrase: self.on_restore_bip39(seed, passphrase)
             self.passphrase_dialog(run_next=f) if is_ext else f('')
@@ -419,12 +419,21 @@ class BaseWizard(util.PrintError):
         k = keystore.from_master_key(text, password)
         self.on_keystore(k)
 
-    def create_standard_seed(self): self.create_seed('standard')
+    def create_standard_seed(self):
+        # we now generate bip39 by default; changing the below back to
+        # 'electrum' would default to electrum seeds again.
+        self.create_seed('bip39')
 
     def create_seed(self, seed_type):
         from . import mnemonic
         self.seed_type = seed_type
-        seed = mnemonic.Mnemonic_Electrum('en').make_seed(self.seed_type)  # TODO make default be BIP39
+        if seed_type in ['standard', 'electrum']:
+            seed = mnemonic.Mnemonic_Electrum('en').make_seed()
+        elif seed_type == 'bip39':
+            seed = mnemonic.Mnemonic('en').make_seed()
+        else:
+            # This should never happen.
+            raise ValueError('Cannot make seed for unknown seed type ' + str(seed_type))
         self.opt_bip39 = False
         f = lambda x: self.request_passphrase(seed, x)
         self.show_seed_dialog(run_next=f, seed_text=seed)
