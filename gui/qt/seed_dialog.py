@@ -89,11 +89,12 @@ class SeedLayout(QVBoxLayout):
                  derivation=None, seed_type=None):
         QVBoxLayout.__init__(self)
         self.parent = parent
-        self.options = options
+        self.options = options or ()
         if title:
             self.addWidget(WWLabel(title))
         self.seed_e = ButtonsTextEdit()
-        self.seed_e.setReadOnly(not editable)
+        self.editable = bool(editable)
+        self.seed_e.setReadOnly(not self.editable)
         if seed:
             self.seed_e.setText(seed)
         else:
@@ -114,7 +115,7 @@ class SeedLayout(QVBoxLayout):
         hbox.addStretch(1)
         self.seed_type_label = QLabel('')
         hbox.addWidget(self.seed_type_label)
-        if options:
+        if self.options:
             opt_button = EnterButton(_('Options'), self.seed_options)
             hbox.addWidget(opt_button)
             self.addLayout(hbox)
@@ -144,7 +145,8 @@ class SeedLayout(QVBoxLayout):
             self.addLayout(grid_maybe)
         self.addStretch(1)
         self.seed_warning = WWLabel('')
-        if msg:
+        self.has_warning_message = bool(msg)
+        if self.has_warning_message:
             self.seed_warning.setText(seed_warning_msg(seed, bool(derivation), bool(passphrase)))
         self.addWidget(self.seed_warning)
 
@@ -154,6 +156,7 @@ class SeedLayout(QVBoxLayout):
 
     _mnem = None
     def on_edit(self):
+        may_clear_warning = not self.has_warning_message and self.editable
         if not self._mnem:
             # cache the lang wordlist so it doesn't need to get loaded each time.
             # This speeds up seed_type_name and Mnemonic.is_checksum_valid
@@ -163,12 +166,24 @@ class SeedLayout(QVBoxLayout):
         if not self.is_bip39:
             t = mnemonic.format_seed_type_name_for_ui(mnemonic.seed_type_name(s))
             label = _('Seed Type') + ': ' + t if t else ''
+            if t and may_clear_warning and 'bip39' in self.options:
+                match_set = mnemonic.autodetect_seed_type(s)
+                if len(match_set) > 1 and mnemonic.SeedType.BIP39 in match_set:
+                    may_clear_warning = False
+                    self.seed_warning.setText(
+                        _('This seed is ambiguous and may also be interpreted as a <b>BIP39</b> seed.')
+                        + '<br/><br/>'
+                        + _('If you wish this seed to be interpreted as a BIP39 seed, '
+                            'then use the Options button to force BIP39 interpretation of this seed.')
+                    )
         else:
             is_checksum, is_wordlist = self._mnem.is_checksum_valid(s)
             status = ('checksum: ' + ('ok' if is_checksum else 'failed')) if is_wordlist else 'unknown wordlist'
             label = 'BIP39' + ' (%s)'%status
         self.seed_type_label.setText(label)
         self.parent.next_button.setEnabled(b)
+        if may_clear_warning:
+            self.seed_warning.setText('')
 
 
 class KeysLayout(QVBoxLayout):
