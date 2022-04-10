@@ -119,3 +119,8 @@ USER 0:0
 RUN apt-get remove cabextract xvfb -y && \
     apt-get autoremove -y
 USER ${USER_ID}:${GROUP_ID}
+
+COPY wrapper.cpp ${WINEPREFIX}/drive_c
+COPY wrapper_install.bat ${WINEPREFIX}/drive_c
+
+RUN wine C:/wrapper_install.bat
