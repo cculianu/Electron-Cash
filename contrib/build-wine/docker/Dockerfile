@@ -124,3 +124,6 @@ COPY wrapper.cpp ${WINEPREFIX}/drive_c
 COPY wrapper_install.bat ${WINEPREFIX}/drive_c
 
 RUN wine C:/wrapper_install.bat
+
+ENV CL=/link /Brepro
+ENV _CL_=/link /Brepro
