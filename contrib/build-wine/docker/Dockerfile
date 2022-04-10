@@ -125,5 +125,8 @@ COPY wrapper_install.bat ${WINEPREFIX}/drive_c
 
 RUN wine C:/wrapper_install.bat
 
-ENV CL=/link /Brepro
-ENV _CL_=/link /Brepro
+# If Windows CL.EXE sees these, it will add these options (this is like a CFLAGS of sorts)
+# We need this option to get reproducible builds without having CL.EXE add timestamps to
+# linked binaries.
+ENV CL="/link /Brepro"
+ENV _CL_="/link /Brepro"
