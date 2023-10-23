@@ -58,7 +58,7 @@ from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct, token
 from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
-from electroncash.wallet import Multisig_Wallet, sweep_preparations
+from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet
 from electroncash.contacts import Contact
 from electroncash import rpa
 try:
@@ -3289,6 +3289,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 def label(key):
                     if isinstance(self.wallet, Multisig_Wallet):
                         return _("cosigner") + ' ' + str(key+1)
+                    elif isinstance(self.wallet, MultiXPubWallet):
+                        return _("Key") + f" {key + 1}"
                     return ''
                 labels = [label(i) for i in range(len(mpk_list))]
                 on_click = lambda clayout: show_mpk(clayout.selected_index())

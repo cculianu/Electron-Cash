@@ -690,7 +690,6 @@ def hardware_keystore(d):
     raise BaseException('unknown hardware type', hw_type)
 
 def load_keystore(storage, name):
-    w = storage.get('wallet_type', 'standard')
     d = storage.get(name, {})
     t = d.get('type')
     if not t:
@@ -831,3 +830,13 @@ def from_master_key(text):
     else:
         raise BaseException('Invalid key')
     return k
+
+def from_master_keys(multiline_text: str):
+    ret = []
+    for line in multiline_text.split():
+        line = line.strip()
+        if not line:
+            continue
+        k = from_master_key(line)
+        ret.append(k)
+    return ret

@@ -3714,6 +3714,40 @@ class Simple_Wallet(Abstract_Wallet):
         self.storage.put('keystore', self.keystore.dump())
 
 
+class Multi_Wallet(Abstract_Wallet):
+    """ wallet with a multiple keystores """
+
+    def get_keystore(self):
+        ks = self.get_keystores()
+        return ks[0] if ks else None
+
+    def get_keystores(self):
+        return self.keystores
+
+    def is_watching_only(self):
+        return all(k.is_watching_only() for k in self.get_keystores())
+
+    def can_change_password(self):
+        return all(k.can_change_password() for k in self.get_keystores())
+
+    def update_password(self, old_pw, new_pw, encrypt=False):
+        if old_pw is None and self.has_password():
+            raise InvalidPassword()
+        for k in self.get_keystores():
+            if k is not None and k.can_change_password():
+                k.update_password(old_pw, new_pw)
+        self.save_keystore()
+        self.storage.set_password(new_pw, encrypt)
+        self.storage.write()
+
+    def save_keystore(self):
+        self.storage.put('keystores', [k.dump() for k in self.get_keystores()])
+
+    @property
+    def keystore(self):
+        return self.get_keystore()
+
+
 class ImportedWalletBase(Simple_Wallet):
 
     txin_type = 'p2pkh'
@@ -4376,7 +4410,77 @@ class Multisig_Wallet(Deterministic_Wallet):
     def is_multisig(self):
         return True
 
-wallet_types = ['standard', 'multisig', 'imported', 'rpa']
+
+class MultiXPubWallet(Multi_Wallet, Deterministic_Wallet):
+    """ Deterministic Wallet with a single pubkey per address, but each address index
+    is modded into a particular BIP32_Keystore. """
+
+    txin_type = 'p2pkh'
+    wallet_type = 'multi_xpub'
+
+    def __init__(self, storage):
+        Deterministic_Wallet.__init__(self, storage)
+
+    def has_seed(self):
+        return False
+
+    def get_seed(self, password):
+        return None
+
+    def add_seed(self, seed, pw):
+        pass
+
+    def get_public_key(self, address):
+        sequence = self.get_address_index(address)
+        pubkey = self.get_pubkey(*sequence)
+        return pubkey
+
+    def load_keystore(self):
+        l = self.storage.get("keystores")
+        assert l and isinstance(l, list)
+        self.keystores = []
+        for d in l:
+            assert isinstance(d, dict)
+            k = load_keystore({"dummy": d}, "dummy")
+            #assert isinstance(k, BIP32_KeyStore), "MultiXPubWallet currently only supports BIP32_KeyStore"
+            self.keystores.append(k)
+
+    def get_pubkey(self, c, i):
+        return self.derive_pubkeys(c, i)
+
+    def get_public_keys(self, address):
+        return [self.get_public_key(address)]
+
+    def _map_address_index(self, index):
+        n_ks = len(self.keystores)
+        which_ks = index % n_ks
+        real_index = index // n_ks
+        return self.keystores[which_ks], real_index
+
+    def add_input_sig_info(self, txin, address):
+        is_change, index = self.get_address_index(address)
+        keystore, real_index = self._map_address_index(index)
+        x_pubkey = keystore.get_xpubkey(is_change, real_index)
+        txin['x_pubkeys'] = [x_pubkey]
+        txin['signatures'] = [None]
+        txin['num_sig'] = 1
+
+    def get_master_public_keys(self):
+        return [k.get_master_public_key() for k in self.keystores]
+
+    def get_fingerprint(self):
+        return ''.join(sorted(self.get_master_public_keys()))
+
+    def derive_pubkeys(self, c, i):
+        keystore, real_index = self._map_address_index(i)
+        return keystore.derive_pubkey(c, real_index)
+
+    @staticmethod
+    def pubkeys_to_address(pubkey):
+        return Address.from_pubkey(pubkey)
+
+
+wallet_types = ['standard', 'multisig', 'imported', 'rpa', 'multi_xpub']
 
 
 def register_wallet_type(category):
@@ -4390,6 +4494,7 @@ wallet_constructors = {
     'imported_privkey': ImportedPrivkeyWallet,
     'imported_addr': ImportedAddressWallet,
     'rpa': RpaWallet,
+    'multi_xpub': MultiXPubWallet,
 }
 
 
