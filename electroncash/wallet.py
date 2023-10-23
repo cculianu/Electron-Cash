@@ -3517,6 +3517,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def get_fingerprint(self):
         raise NotImplementedError()
 
+    def is_watching_only(self):
+        """Reimplemented in subclasses"""
+        raise NotImplementedError()
+
+    def can_fully_sign_for_all_addresses(self):
+        """Checks that all keystores are able to sign. Relevant for MultiXPubWallet hybrid wallets which have
+        multiple keystores, not all of which have the private keys for their associated addresses."""
+        return not self.is_watching_only() and all(not ks.is_watching_only() for ks in self.get_keystores())
+
     def can_import_privkey(self):
         return False
 

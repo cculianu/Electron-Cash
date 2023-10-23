@@ -195,8 +195,8 @@ class Plugin(FusionPlugin, QObject):
             self.server_status_changed_signal.connect(sbbtn.update_server_error)
         else:
             # If we can not fuse we create a dummy fusion button that just displays a message
-            sbmsg = _('This wallet type ({wtype}) cannot be used with CashFusion.\n\n'
-                      'Please use a standard deterministic spending wallet with CashFusion.').format(wtype=wallet.wallet_type)
+            sbmsg = _('This wallet cannot be used with CashFusion.\n\n'
+                      'Please use a standard deterministic spending wallet with CashFusion.')
             sbbtn = DisabledFusionButton(wallet, sbmsg)
 
         # bit of a dirty hack, to insert our status bar icon (always using index 4, should put us just after the password-changer icon)

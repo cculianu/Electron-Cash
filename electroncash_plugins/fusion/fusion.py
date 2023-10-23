@@ -34,7 +34,7 @@ from electroncash import networks, schnorr
 from electroncash.bitcoin import public_key_from_private_key
 from electroncash.i18n import _, ngettext, pgettext
 from electroncash.util import format_satoshis, do_in_main_thread, PrintError, ServerError, TxHashMismatch, TimeoutException
-from electroncash.wallet import Standard_Wallet, Multisig_Wallet
+from electroncash.wallet import Standard_Wallet, Multisig_Wallet, MultiXPubWallet
 
 from . import encrypt
 from . import fusion_pb2 as pb
@@ -83,15 +83,18 @@ MAX_FEE = MAX_COMPONENT_FEERATE * 7 + MAX_EXCESS_FEE
 # (distinct tx inputs, and tx outputs)
 MIN_TX_COMPONENTS = 11
 
+
 def can_fuse_from(wallet):
     """We can only fuse from wallets that are p2pkh, and where we are able
     to extract the private key."""
-    return not (wallet.is_watching_only() or wallet.is_hardware() or isinstance(wallet, Multisig_Wallet))
+    return (not wallet.is_watching_only() and not wallet.is_hardware() and not isinstance(wallet, Multisig_Wallet)
+            and wallet.can_fully_sign_for_all_addresses())
+
 
 def can_fuse_to(wallet):
     """We can only fuse to wallets that are p2pkh with HD generation. We do
     *not* need the private keys."""
-    return isinstance(wallet, Standard_Wallet)
+    return isinstance(wallet, (Standard_Wallet, MultiXPubWallet))
 
 
 
