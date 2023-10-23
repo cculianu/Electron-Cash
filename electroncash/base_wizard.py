@@ -189,7 +189,7 @@ class BaseWizard(util.PrintError):
                 # Note: We accept multiple xpubs/xprvs here. For multiples ultimately the wallet created will be
                 # a MultiXpubWallet in self.on_keystore()
                 ks = keystore.from_master_keys(multiline_text)
-                return len(ks) >= 1
+                return len(ks) >= 1 and len(ks) == len(multiline_text.split())
             title = _("Create keystore from one or more master key(s)")
             message = ' '.join([
                 _("To create a watching-only wallet, please enter your master public key (xpub/ypub/zpub)."),

@@ -1522,7 +1522,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.saved = True
 
     def new_payment_request(self):
-        addr = self.wallet.get_unused_address(frozen_ok=False)
+        addr = self.wallet.get_unused_address(frozen_ok=False, preferred=True)
         if addr is None:
             if not self.wallet.is_deterministic():
                 msg = [
@@ -1537,7 +1537,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 # Warn if past gap limit.
                 if not self.question(_("Warning: The next address will not be recovered automatically if you restore your wallet from seed; you may need to add it manually.\n\nThis occurs because you have too many unused addresses in your wallet. To avoid this situation, use the existing addresses first.\n\nCreate anyway?")):
                     return
-                addr = self.wallet.create_new_address(False)
+                addr = self.wallet.create_new_preferred_address(False)
         self.set_receive_address(addr)
         self.expires_label.hide()
         self.expires_combo.show()
@@ -1581,7 +1581,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if addr is None:
                 if self.wallet.is_deterministic():
                     # creae a new one if deterministic
-                    addr = self.wallet.create_new_address(False)
+                    addr = self.wallet.create_new_preferred_address(False)
                 else:
                     # otherwise give up and just re-use one.
                     addr = self.wallet.get_receiving_address()
@@ -2453,7 +2453,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.payment_request = None
                 return False, _("Payment request has expired")
             if pr:
-                refund_address = self.wallet.get_receiving_addresses()[0]
+                refund_address = self.wallet.get_receiving_address(preferred=True)
                 ack_status, ack_msg = pr.send_payment(str(tx), refund_address)
                 if not ack_status:
                     if ack_msg == "no url":
@@ -4081,10 +4081,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return success
 
     def sweep_key_dialog(self):
-        addresses = self.wallet.get_unused_addresses()
+        addresses = self.wallet.get_unused_addresses(preferred=True)
         if not addresses:
             try:
-                addresses = self.wallet.get_receiving_addresses()
+                addresses = self.wallet.get_preferred_receiving_addresses()
             except AttributeError:
                 addresses = self.wallet.get_addresses()
         if not addresses:
@@ -5339,7 +5339,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo.png"))
             if addr is None:
                 return  # user cancel
-        addr = addr or self.receive_address or self.wallet.get_receiving_address()
+        addr = addr or self.receive_address or self.wallet.get_receiving_address(preferred=True)
         if not addr:
             self.print_error("register_new_cash_account: no receive address specified")
             return

@@ -34,7 +34,7 @@ from electroncash import networks, schnorr
 from electroncash.bitcoin import public_key_from_private_key
 from electroncash.i18n import _, ngettext, pgettext
 from electroncash.util import format_satoshis, do_in_main_thread, PrintError, ServerError, TxHashMismatch, TimeoutException
-from electroncash.wallet import Standard_Wallet, Multisig_Wallet, MultiXPubWallet
+from electroncash.wallet import Standard_Wallet, Multisig_Wallet, MultiXPubWallet, PrivateKeyMissing
 
 from . import encrypt
 from . import fusion_pb2 as pb
@@ -341,15 +341,23 @@ class Fusion(threading.Thread, PrintError):
         # get private keys and convert x_pubkeys to real pubkeys
         keypairs = dict()
         pubkeys = dict()
+        pubkeys_missing_privkeys = set()  # For MultiXPubWallet
         for xpubkey in xpubkeys_set:
             derivation = wallet.keystore.get_pubkey_derivation(xpubkey)
-            privkey = wallet.keystore.get_private_key(derivation, password)
+            try:
+                privkey = wallet.keystore.get_private_key(derivation, password)
+            except PrivateKeyMissing:
+                # This branch is here in case we ever decide to support MultiXPubWallet with missing privkeys
+                pubkeys_missing_privkeys.add(xpubkey)
+                continue
             pubkeyhex = public_key_from_private_key(*privkey)
             pubkey = bytes.fromhex(pubkeyhex)
             keypairs[pubkeyhex] = privkey
             pubkeys[xpubkey] = pubkey
 
-        coindict = {(c['prevout_hash'], c['prevout_n']): (pubkeys[c['x_pubkeys'][0]], c['value']) for c in coins}
+        coindict = {(c['prevout_hash'], c['prevout_n']): (pubkeys[c['x_pubkeys'][0]], c['value'])
+                    for c in coins
+                    if c['x_pubkeys'][0] not in pubkeys_missing_privkeys}
         self.add_coins(coindict, keypairs)
 
         coinstrs = set(t + ':' + str(i) for t,i in coindict)
