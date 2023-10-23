@@ -4442,7 +4442,6 @@ class MultiXPubWallet(Multi_Wallet, Deterministic_Wallet):
         for d in l:
             assert isinstance(d, dict)
             k = load_keystore({"dummy": d}, "dummy")
-            #assert isinstance(k, BIP32_KeyStore), "MultiXPubWallet currently only supports BIP32_KeyStore"
             self.keystores.append(k)
 
     def get_pubkey(self, c, i):

@@ -835,8 +835,10 @@ def from_master_keys(multiline_text: str):
     ret = []
     for line in multiline_text.split():
         line = line.strip()
-        if not line:
-            continue
-        k = from_master_key(line)
-        ret.append(k)
+        if line:
+            try:
+                k = from_master_key(line)
+            except:
+                continue
+            ret.append(k)
     return ret

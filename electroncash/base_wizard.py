@@ -87,7 +87,6 @@ class BaseWizard(util.PrintError):
             ('standard',  _("Standard wallet")),
             ('multisig',  _("Multi-signature wallet")),
             ('imported',  _("Import Bitcoin Cash addresses or private keys")),
-            ('multi_xpub', _("Multiple watched xpubs")),
             #('rpa', _("Reusable payment address")),
         ]
         choices = [pair for pair in wallet_kinds if pair[0] in wallet_types]
@@ -103,8 +102,6 @@ class BaseWizard(util.PrintError):
             action = 'import_addresses_or_keys'
         elif choice == 'rpa':
             action = 'on_rpa'
-        elif choice == 'multi_xpub':
-            action = 'restore_from_key'
         self.run(action)
 
     def choose_multisig(self):
@@ -116,7 +113,7 @@ class BaseWizard(util.PrintError):
         self.multisig_dialog(run_next=on_multisig)
 
     def choose_keystore(self):
-        assert self.wallet_type in ['standard', 'multisig','rpa']
+        assert self.wallet_type in ['standard', 'multisig', 'rpa']
         i = len(self.keystores)
         title = _('Add cosigner') + ' (%d of %d)'%(i+1, self.n) if self.wallet_type=='multisig' else _('Keystore')
         if self.wallet_type == 'rpa':
@@ -126,7 +123,7 @@ class BaseWizard(util.PrintError):
                 ('create_standard_seed', _('Create a new seed')),
                 ('restore_from_seed', _('I already have a seed')),
             ]
-        elif self.wallet_type =='standard' or i==0:
+        elif self.wallet_type == 'standard' or i == 0:
             message = _('Do you want to create a new seed, or to restore a wallet using an existing seed?')
             choices = [
                 ('create_standard_seed', _('Create a new seed')),
@@ -188,38 +185,31 @@ class BaseWizard(util.PrintError):
 
     def restore_from_key(self):
         if self.wallet_type == 'standard':
-            v = keystore.is_master_key
-            title = _("Create keystore from a master key")
+            def is_valid(multiline_text: str):
+                # Note: We accept multiple xpubs/xprvs here. For multiples ultimately the wallet created will be
+                # a MultiXpubWallet in self.on_keystore()
+                ks = keystore.from_master_keys(multiline_text)
+                return len(ks) >= 1
+            title = _("Create keystore from one or more master key(s)")
             message = ' '.join([
                 _("To create a watching-only wallet, please enter your master public key (xpub/ypub/zpub)."),
-                _("To create a spending wallet, please enter a master private key (xprv/yprv/zprv).")
+                _("To create a spending wallet, please enter a master private key (xprv/yprv/zprv)."),
+                "\n\n" + _("You may enter multiple xpub and/or xprv keys to create a multi-xpub wallet."),
             ])
-            self.add_xpub_dialog(title=title, message=message, run_next=self.on_restore_from_key, is_valid=v)
-        elif self.wallet_type == 'multi_xpub':
-            def is_valid(multiline_text: str):
-                try:
-                    ks = keystore.from_master_keys(multiline_text)
-                    return len(ks) > 1
-                except:
-                    return False
-            title = _("Create keystore from multiple master keys")
-            message = ' '.join([
-                _("To create a watching-only wallet, please enter multiple master public keys (xpub/ypub/zpub)."),
-                _("To create a spending wallet, please enter multiple master private keys (xprv/yprv/zprv).")
-            ])
-            self.add_xpub_dialog(title=title, message=message, run_next=self.on_restore_from_keys, is_valid=is_valid)
+            self.add_xpub_dialog(title=title, message=message, run_next=self.on_restore_from_key, is_valid=is_valid)
         else:
             i = len(self.keystores) + 1
             self.add_cosigner_dialog(index=i, run_next=self.on_restore_from_key, is_valid=keystore.is_bip32_key)
 
-    def on_restore_from_key(self, text):
-        k = keystore.from_master_key(text)
-        self.on_keystore(k)
-
-    def on_restore_from_keys(self, multiline_text):
-        klist = keystore.from_master_keys(multiline_text)
-        self.keystores = klist
-        self.on_keystore(None)
+    def on_restore_from_key(self, maybe_multiline_text):
+        klist = keystore.from_master_keys(maybe_multiline_text)
+        multi_xpub = None
+        if self.wallet_type == 'standard':
+            if len(klist) > 1:
+                # Auto-detect multi_xpub case and indicate it
+                multi_xpub = klist
+        k = klist[0]
+        self.on_keystore(k, multi_xpub=multi_xpub)
 
     def on_hw_wallet_support(self):
         ''' Derived class InstallWizard for Qt implements this '''
@@ -389,7 +379,7 @@ class BaseWizard(util.PrintError):
         k = keystore.from_seed(seed, passphrase, derivation=derivation, seed_type='bip39')
         self.on_keystore(k)
 
-    def on_keystore(self, k):
+    def on_keystore(self, k, *, multi_xpub=None):
         has_xpub = isinstance(k, keystore.Xpub)
         if has_xpub:
             from .bitcoin import xpub_type
@@ -398,21 +388,24 @@ class BaseWizard(util.PrintError):
             keys = k.dump()
             self.keystores.append(k)
         elif self.wallet_type == 'standard':
-            if has_xpub and t1 not in ['standard']:
-                self.show_error(_('Wrong key type') + ' %s'%t1)
-                self.run('choose_keystore')
-                return
-            self.keystores.append(k)
-            self.run('create_wallet')
-        elif self.wallet_type == 'multi_xpub':
-            assert isinstance(self.keystores, list) and len(self.keystores) > 1
-            seen = set()
-            for ks in self.keystores:
-                if ks.xpub in seen:
-                    self.show_error(_('Error: duplicate master public key'))
-                    self.run('restore_from_key')
+            if multi_xpub:
+                # Multi-xpub case
+                seen = set()
+                for ks in multi_xpub:
+                    if ks.get_master_public_key() in seen:
+                        self.show_error(_('Error: duplicate master public key'))
+                        self.run('restore_from_key')
+                        return
+                    seen.add(ks.get_master_public_key())
+                self.keystores = multi_xpub
+                self.seed_type = None
+            else:
+                # Regular standard wallet
+                if has_xpub and t1 not in ['standard']:
+                    self.show_error(_('Wrong key type') + ' %s'%t1)
+                    self.run('choose_keystore')
                     return
-                seen.add(ks.xpub)
+                self.keystores.append(k)
             self.run('create_wallet')
         elif self.wallet_type == 'multisig':
             assert has_xpub
@@ -424,7 +417,7 @@ class BaseWizard(util.PrintError):
                 self.show_error(_('Error: duplicate master public key'))
                 self.run('choose_keystore')
                 return
-            if len(self.keystores)>0:
+            if len(self.keystores) > 0:
                 t2 = xpub_type(self.keystores[0].xpub)
                 if t1 != t2:
                     self.show_error(_('Cannot add this cosigner:') + '\n' + "Their key type is '%s', we are '%s'"%(t1, t2))
@@ -459,10 +452,17 @@ class BaseWizard(util.PrintError):
             text = ""
             self.wallet = RpaWallet.from_text(self.storage, text, password)
         elif self.wallet_type == 'standard':
-            self.storage.put('seed_type', self.seed_type)
-            keys = self.keystores[0].dump()
-            self.storage.put('keystore', keys)
-            self.wallet = Standard_Wallet(self.storage)
+            if len(self.keystores) > 1 and not self.seed_type:
+                # Multi-xpub case
+                self.storage.put('keystores', [k.dump() for k in self.keystores])
+                self.storage.write()
+                self.wallet = MultiXPubWallet(self.storage)
+            else:
+                # Normal standard wallet
+                self.storage.put('seed_type', self.seed_type)
+                keys = self.keystores[0].dump()
+                self.storage.put('keystore', keys)
+                self.wallet = Standard_Wallet(self.storage)
             self.run('create_addresses')
         elif self.wallet_type == 'multisig':
             for i, k in enumerate(self.keystores):
@@ -472,11 +472,6 @@ class BaseWizard(util.PrintError):
             self.run('create_addresses')
         elif self.wallet_type == 'imported':
             self.wallet.save_keystore()
-        elif self.wallet_type == 'multi_xpub':
-            self.storage.put('keystores', [k.dump() for k in self.keystores])
-            self.storage.write()
-            self.wallet = MultiXPubWallet(self.storage)
-            self.run('create_addresses')
 
     def show_xpub_and_add_cosigners(self, xpub):
         self.show_xpub_dialog(xpub=xpub, run_next=lambda x: self.run('choose_keystore'))
