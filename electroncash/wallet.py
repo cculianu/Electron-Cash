@@ -3728,7 +3728,7 @@ class Multi_Wallet(Abstract_Wallet):
         return all(k.is_watching_only() for k in self.get_keystores())
 
     def can_change_password(self):
-        return all(k.can_change_password() for k in self.get_keystores())
+        return any(k.can_change_password() for k in self.get_keystores())
 
     def update_password(self, old_pw, new_pw, encrypt=False):
         if old_pw is None and self.has_password():
