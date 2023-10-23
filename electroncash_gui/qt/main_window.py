@@ -58,7 +58,7 @@ from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct, token
 from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
-from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet
+from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet, PrivateKeyMissing
 from electroncash.contacts import Contact
 from electroncash import rpa
 try:
@@ -3821,6 +3821,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 except InvalidPassword:
                     # See #921 -- possibly a corrupted wallet or other strangeness
                     privkey = 'INVALID_PASSWORD'
+                except PrivateKeyMissing:
+                    privkey = 'WATCHING_ONLY'
                 private_keys[addr.to_ui_string()] = privkey
                 strong_d = weak_d()
                 try:
