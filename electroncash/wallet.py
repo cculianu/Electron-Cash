@@ -4614,6 +4614,7 @@ class MultiXPubWallet(Deterministic_Wallet):
         for d in l:
             assert isinstance(d, dict)
             k = load_keystore({"dummy": d}, "dummy")
+            assert k.is_deterministic(), "This class only supports deterministic wallets"
             self.keystores.append(k)
 
     def save_keystore(self):
