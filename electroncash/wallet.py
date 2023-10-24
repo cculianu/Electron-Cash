@@ -3803,6 +3803,8 @@ class ImportedWalletBase(Simple_Wallet):
                 self.verified_tx.pop(tx_hash, None)
                 self.unverified_tx.pop(tx_hash, None)
                 self.transactions.pop(tx_hash, None)
+                self.ct_txi.pop(tx_hash, None)
+                self.ct_txo.pop(tx_hash, None)
                 self._addr_bal_cache.pop(address, None)  # not strictly necessary, above calls also have this side-effect. but here to be safe. :)
                 if self.verifier:
                     # TX is now gone. Toss its SPV proof in case we have it
@@ -3810,7 +3812,15 @@ class ImportedWalletBase(Simple_Wallet):
                     # will avoid the situation where the UI says "not verified"
                     # erroneously!
                     self.verifier.remove_spv_proof_for_tx(tx_hash)
-                # FIXME: what about pruned_txo?
+                # Remove also from pruned_txo
+                if tx_hash in self.pruned_txo_values:
+                    self.pruned_txo_values.discard(tx_hash)
+                    to_pop = []
+                    for key, th in self.pruned_txo.items():
+                        if tx_hash == th:
+                            to_pop.append(key)
+                    for key in to_pop:
+                        self.pruned_txo.pop(key, None)
 
             self.storage.put('verified_tx3', self.verified_tx)
 
@@ -3819,15 +3829,14 @@ class ImportedWalletBase(Simple_Wallet):
         self.set_label(address, None)
         self.remove_payment_request(address, {})
         self.set_frozen_state([address], False)
-
-        self.delete_address_derived(address)
+        self.delete_address_derived(address)  # Assumption: derived class implements this
+        self.invalidate_address_set_cache()
 
         self.cashacct.on_address_deletion(address)
         self.cashacct.save()
 
         self.save_addresses()
-
-        self.storage.write() # no-op if above already wrote
+        self.storage.write()  # no-op if above already wrote
 
 
 class ImportedAddressWallet(ImportedWalletBase):
@@ -4426,8 +4435,11 @@ class MultiXPubWallet(Deterministic_Wallet):
     def __init__(self, storage):
         Deterministic_Wallet.__init__(self, storage)
         # Scale gap limit to catch everything from all sub-xpubs
+        prev_gap_limit = self.gap_limit
         self.gap_limit = max(self.gap_limit, 20 * len(self.keystores))
         self.gap_limit_for_change = max(self.gap_limit_for_change, self.gap_limit)
+        if self.gap_limit != prev_gap_limit:
+            self.storage.put("gap_limit", self.gap_limit)
 
     class _KeyStoreFacade:
         """This class is used as a facade to catch calls to wallet.keystore by code in the app
@@ -4479,6 +4491,59 @@ class MultiXPubWallet(Deterministic_Wallet):
 
     def get_keystores(self):
         return self.keystores
+
+    def _remove_add_keystore_common(self):
+        self.gap_limit = max(self.gap_limit, 20 * len(self.keystores))
+        self.gap_limit_for_change = max(self.gap_limit_for_change, self.gap_limit)
+        self.storage.put("gap_limit", self.gap_limit)
+        self.save_keystore()
+        with self.lock:
+            self.change_reserved.clear()
+            self.change_reserved_default.clear()
+            self.change_unreserved.clear()
+            self.change_reserved_tmp.clear()
+            self.invalidate_address_set_cache()
+            self.save_addresses()
+
+    def remove_keystore(self, index, rebuild_history=True):
+        """Note that removing a keystore really should involve full wallet history rebuild via self.rebuild_history()
+        due to all the invariants that are now potentially violated by this operation."""
+        n_ks = len(self.keystores)
+        if index < 0 or index >= n_ks or n_ks == 1:
+            raise ValueError(_('Cannot remove keystore at index {index}').format(index=index))
+        ra, ca = self.receiving_addresses, self.change_addresses
+        with self.lock:
+            # delete every n_ks address starting at index
+            del ra[index::n_ks]
+            del ca[index::n_ks]
+            del self.keystores[index]
+        self._remove_add_keystore_common()
+        if rebuild_history:
+            self.rebuild_history()
+
+    def add_keystore(self, master_key, rebuild_history=True):
+        """Note that adding a keystore really should involve full wallet history rebuild via self.rebuild_history()
+        due to all the invariants that are now potentially violated by this operation."""
+        assert keystore.is_master_key(master_key)
+        ks = keystore.from_master_key(master_key)
+        if any(ks.get_master_public_key() == k.get_master_public_key() for k in self.keystores):
+            return
+        n_ks = len(self.keystores)
+        with self.lock:
+            for for_change in (False, True):
+                addrs = self.change_addresses if for_change else self.receiving_addresses
+                n_addrs = len(addrs)
+                # Add addresses
+                n_added = 0
+                for i in range(n_ks, n_addrs, n_ks):
+                    pubkey = ks.derive_pubkey(for_change, n_added)
+                    addr = Address.from_pubkey(pubkey)
+                    addrs.insert(i + n_added, addr)
+                    n_added += 1
+        self.keystores.append(ks)
+        self._remove_add_keystore_common()
+        if rebuild_history:
+            self.rebuild_history()
 
     def is_watching_only(self):
         return all(k.is_watching_only() for k in self.get_keystores())
