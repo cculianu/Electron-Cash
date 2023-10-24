@@ -10,6 +10,7 @@ import webbrowser
 from collections import namedtuple
 from functools import partial, wraps
 from locale import atof
+from typing import Optional
 
 from electroncash.address import Address
 from electroncash.util import print_error, PrintError, Weak, finalization_print_error
@@ -501,12 +502,16 @@ class ChoicesLayout(object):
             group.idClicked.connect(partial(on_id_clicked, self))
 
         self.vbox = vbox
+        self.gb = gb2
 
     def layout(self):
         return self.vbox
 
     def selected_index(self):
         return self.group.checkedId()
+
+    def group_box(self):
+        return self.gb
 
 def address_combo(addresses):
     addr_combo = QComboBox()

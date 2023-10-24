@@ -3267,7 +3267,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def show_master_public_keys(self):
         dialog = WindowModalDialog(self.top_level_window(), _("Wallet Information"))
         dialog.setMinimumSize(500, 100)
-        mpk_list = self.wallet.get_master_public_keys()
+        mpk_list: List[str] = self.wallet.get_master_public_keys()
+        orig_mpk_list = mpk_list[:]
         vbox = QVBoxLayout()
         wallet_type = self.wallet.storage.get('wallet_type', '')
         grid = QGridLayout()
@@ -3281,18 +3282,28 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         vbox.addLayout(grid)
         bottom_buttons = Buttons(CloseButton(dialog))
         if self.wallet.is_deterministic():
+            has_prvkey_ct = sum(ks.has_master_private_key() for ks in self.wallet.get_keystores()
+                                if isinstance(ks, keystore.Xprv))
             mpk_text = ShowQRTextEdit()
             mpk_text.setMaximumHeight(150)
             mpk_text.addCopyButton()
             mpk_del_button: Optional[QPushButton] = None
+            show_privkey_button: Optional[QToolButton] = None
             selected_index: Optional[int] = None
+            title_lbl: Optional[QLabel] = None
+            title_gb: Optional[QGroupBox] = None
+            password: Optional[str] = None
             def mpk_selected(clayout, index):
                 nonlocal selected_index
                 selected_index = index
                 mpk_text.setText(mpk_list[index])
-                if mpk_del_button and clayout:
-                    name = (clayout.group.checkedButton() and clayout.group.checkedButton().text()) or ""
+                name = (clayout and clayout.group.checkedButton() and clayout.group.checkedButton().text()) or _("Key")
+                if mpk_del_button:
                     mpk_del_button.setText(_("Delete") + " " + name)
+                if show_privkey_button:
+                    ks = self.wallet.get_keystores()[index]
+                    if not show_privkey_button.isChecked():
+                        show_privkey_button.setEnabled(isinstance(ks, keystore.Xprv) and ks.has_master_private_key())
             # only show the combobox in case multiple accounts are available
             labels_clayout = None
             if len(mpk_list) > 1:
@@ -3304,9 +3315,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     return ''
                 labels = [label(i) for i in range(len(mpk_list))]
                 labels_clayout = ChoicesLayout(_("Master Public Keys"), labels, on_id_clicked=mpk_selected)
+                title_gb = labels_clayout.group_box()
                 vbox.addLayout(labels_clayout.layout())
             else:
-                vbox.addWidget(QLabel(_("Master Public Key")))
+                title_lbl = QLabel(_("Master Public Key"))
+                vbox.addWidget(title_lbl)
             vbox.addWidget(mpk_text)
             if self.wallet.can_delete_keystore() and labels_clayout:
                 def on_click(checked):
@@ -3331,7 +3344,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 marg.setRight(marg.right() // 2)
                 add_but.setContentsMargins(marg)
                 bottom_buttons.insertWidget(0, add_but, Qt.AlignLeft)
-                bottom_buttons.insertStretch(1, 2)
                 def on_click(checked):
                     d = QDialog(parent=dialog)
                     d.setWindowModality(Qt.WindowModal)
@@ -3356,6 +3368,43 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         if self.wallet_add_xpub(l.get_text().strip()):
                             dialog.close()
                 add_but.clicked.connect(on_click)
+            if has_prvkey_ct > 0:
+                show_privkey_button = QToolButton()
+                show_privkey_button.setText(_("Show XPrv"))
+                show_privkey_button.setToolTip(_("Toggle display of public versus private master keys"))
+                show_privkey_button.setCheckable(True)
+                show_privkey_button.setContentsMargins(1, 1, 1, 1)
+                mpk_text.addWidget(show_privkey_button)
+                def on_toggle(checked):
+                    nonlocal mpk_list, password
+                    if not checked:
+                        mpk_list = orig_mpk_list[:]
+                        mpk_selected(labels_clayout, selected_index)  # Force redraw of text area with new text
+                    else:
+                        for i, ks in enumerate(self.wallet.get_keystores()):
+                            if isinstance(ks, keystore.Xprv) and ks.has_master_private_key():
+                                if ks.is_master_private_key_encrypted() and password is None:
+                                    password = self.password_dialog(parent=dialog)
+                                    if password is None:
+                                        show_privkey_button.setChecked(False)
+                                        return
+                                try:
+                                    mpk_list[i] = ks.get_master_private_key(password)
+                                except InvalidPassword as e:
+                                    password = None  # Clear nonlocal
+                                    self.show_error(e)
+                                    show_privkey_button.setChecked(False)
+                                    return
+                            else:
+                                mpk_list[i] = _('No XPrv')
+                        mpk_selected(labels_clayout, selected_index)  # Forces redraw of text area
+                    if title_lbl is not None:
+                        title_lbl.setText(_("Master Public Key") if not checked else _("Master Private Key"))
+                    if title_gb is not None:
+                        title_gb.setTitle(_("Master Public Keys") if not checked else _("Master Private Keys"))
+
+                show_privkey_button.toggled.connect(on_toggle)
+            bottom_buttons.insertStretch(bottom_buttons.count()-1, 2)
             mpk_selected(labels_clayout, 0)
         vbox.addStretch(1)
         vbox.addLayout(bottom_buttons)
