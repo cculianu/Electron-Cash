@@ -3590,9 +3590,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return self.keystore.decrypt_message(index, message, password)
 
     def rebuild_history(self):
-        ''' This is an advanced function for use in the GUI when the user
+        """ This is an advanced function for use in the GUI when the user
         wants to resynch the whole wallet from scratch, preserving labels
-        and contacts.  '''
+        and contacts. """
         if not self.network or not self.network.is_connected():
             raise RuntimeError('Refusing to rebuild wallet without a valid server connection!')
         if not self.synchronizer or not self.verifier:
@@ -4183,6 +4183,14 @@ class Deterministic_Wallet(Abstract_Wallet):
     def add_seed(self, seed, pw):
         self.keystore.add_seed(seed, pw)
 
+    def can_delete_keystore(self):
+        """Reimplemented in MultiXPubWallet"""
+        return False
+
+    def can_add_keystore(self):
+        """Reimplemented in MultiXPubWallet"""
+        return False
+
     def change_gap_limit(self, value):
         '''This method is not called in the code, it is kept for console use'''
         with self.lock:
@@ -4492,32 +4500,43 @@ class MultiXPubWallet(Deterministic_Wallet):
     def get_keystores(self):
         return self.keystores
 
-    def _remove_add_keystore_common(self):
+    def _delete_add_keystore_common(self):
+        # Assumption: self.lock is held by caller
+        saved_gap_limit = self.gap_limit
+        saved_gap_limit_for_change = self.gap_limit_for_change
         self.gap_limit = max(self.gap_limit, 20 * len(self.keystores))
         self.gap_limit_for_change = max(self.gap_limit_for_change, self.gap_limit)
         self.storage.put("gap_limit", self.gap_limit)
         self.save_keystore()
-        with self.lock:
-            self.change_reserved.clear()
-            self.change_reserved_default.clear()
-            self.change_unreserved.clear()
-            self.change_reserved_tmp.clear()
-            self.invalidate_address_set_cache()
-            self.save_addresses()
+        self.change_reserved.clear()
+        self.change_reserved_default.clear()
+        self.change_unreserved.clear()
+        self.change_reserved_tmp.clear()
+        # delete every address and regen
+        del self.receiving_addresses[:]
+        del self.change_addresses[:]
+        while len(self.receiving_addresses) < saved_gap_limit:
+            self.create_new_address(for_change=False, save=False)
+        while len(self.change_addresses) < saved_gap_limit_for_change:
+            self.create_new_address(for_change=True, save=False)
+        self.invalidate_address_set_cache()
+        self.save_addresses()
 
-    def remove_keystore(self, index, rebuild_history=True):
+    def can_delete_keystore(self):
+        return len(self.keystores) > 1
+
+    def can_add_keystore(self):
+        return True
+
+    def delete_keystore(self, index, rebuild_history=True):
         """Note that removing a keystore really should involve full wallet history rebuild via self.rebuild_history()
         due to all the invariants that are now potentially violated by this operation."""
         n_ks = len(self.keystores)
         if index < 0 or index >= n_ks or n_ks == 1:
-            raise ValueError(_('Cannot remove keystore at index {index}').format(index=index))
-        ra, ca = self.receiving_addresses, self.change_addresses
+            raise ValueError(_('Cannot delete keystore at index {index}').format(index=index))
         with self.lock:
-            # delete every n_ks address starting at index
-            del ra[index::n_ks]
-            del ca[index::n_ks]
             del self.keystores[index]
-        self._remove_add_keystore_common()
+            self._delete_add_keystore_common()
         if rebuild_history:
             self.rebuild_history()
 
@@ -4527,21 +4546,10 @@ class MultiXPubWallet(Deterministic_Wallet):
         assert keystore.is_master_key(master_key)
         ks = keystore.from_master_key(master_key)
         if any(ks.get_master_public_key() == k.get_master_public_key() for k in self.keystores):
-            return
-        n_ks = len(self.keystores)
+            raise ValueError(_('XPub already exists in wallet') + f":\n{str(master_key)}")
         with self.lock:
-            for for_change in (False, True):
-                addrs = self.change_addresses if for_change else self.receiving_addresses
-                n_addrs = len(addrs)
-                # Add addresses
-                n_added = 0
-                for i in range(n_ks, n_addrs, n_ks):
-                    pubkey = ks.derive_pubkey(for_change, n_added)
-                    addr = Address.from_pubkey(pubkey)
-                    addrs.insert(i + n_added, addr)
-                    n_added += 1
-        self.keystores.append(ks)
-        self._remove_add_keystore_common()
+            self.keystores.append(ks)
+            self._delete_add_keystore_common()
         if rebuild_history:
             self.rebuild_history()
 

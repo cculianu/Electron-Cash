@@ -70,6 +70,7 @@ import electroncash.web as web
 from .amountedit import AmountEdit, BTCAmountEdit, MyLineEdit, BTCSatsByteEdit
 from .qrcodewidget import QRCodeWidget, QRDialog
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
+from .seed_dialog import SeedDialog, KeysLayout
 from .transaction_dialog import show_transaction
 from .fee_slider import FeeSlider
 from .popup_widget import ShowPopupLabel, KillPopupLabel
@@ -3271,20 +3272,29 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         wallet_type = self.wallet.storage.get('wallet_type', '')
         grid = QGridLayout()
         basename = os.path.basename(self.wallet.storage.path)
-        grid.addWidget(QLabel(_("Wallet name")+ ':'), 0, 0)
+        grid.addWidget(QLabel(_("Wallet name") + ':'), 0, 0)
         grid.addWidget(QLabel(basename), 0, 1)
-        grid.addWidget(QLabel(_("Wallet type")+ ':'), 1, 0)
+        grid.addWidget(QLabel(_("Wallet type") + ':'), 1, 0)
         grid.addWidget(QLabel(wallet_type), 1, 1)
-        grid.addWidget(QLabel(_("Script type")+ ':'), 2, 0)
+        grid.addWidget(QLabel(_("Script type") + ':'), 2, 0)
         grid.addWidget(QLabel(self.wallet.txin_type), 2, 1)
         vbox.addLayout(grid)
+        bottom_buttons = Buttons(CloseButton(dialog))
         if self.wallet.is_deterministic():
             mpk_text = ShowQRTextEdit()
             mpk_text.setMaximumHeight(150)
             mpk_text.addCopyButton()
-            def show_mpk(index):
+            mpk_del_button: Optional[QPushButton] = None
+            selected_index: Optional[int] = None
+            def mpk_selected(clayout, index):
+                nonlocal selected_index
+                selected_index = index
                 mpk_text.setText(mpk_list[index])
+                if mpk_del_button and clayout:
+                    name = (clayout.group.checkedButton() and clayout.group.checkedButton().text()) or ""
+                    mpk_del_button.setText(_("Delete") + " " + name)
             # only show the combobox in case multiple accounts are available
+            labels_clayout = None
             if len(mpk_list) > 1:
                 def label(key):
                     if isinstance(self.wallet, Multisig_Wallet):
@@ -3293,15 +3303,62 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         return _("Key") + f" {key + 1}"
                     return ''
                 labels = [label(i) for i in range(len(mpk_list))]
-                on_click = lambda clayout: show_mpk(clayout.selected_index())
-                labels_clayout = ChoicesLayout(_("Master Public Keys"), labels, on_click)
+                labels_clayout = ChoicesLayout(_("Master Public Keys"), labels, on_id_clicked=mpk_selected)
                 vbox.addLayout(labels_clayout.layout())
             else:
                 vbox.addWidget(QLabel(_("Master Public Key")))
-            show_mpk(0)
             vbox.addWidget(mpk_text)
+            if self.wallet.can_delete_keystore() and labels_clayout:
+                def on_click(checked):
+                    if selected_index is not None:
+                        if self.wallet_delete_xpub(selected_index):
+                            dialog.close()
+                mpk_del_button = mpk_text.addButton(icon_name=None, on_click=on_click, index=0,
+                                                    tooltip=_("Delete this key from the wallet"),
+                                                    # This is tmp text for layout, gets set to real text by mpk_selected
+                                                    # above ...
+                                                    text="Delete Key 1")
+                red = ColorScheme.RED.get_html(True)
+                red_alt = ColorScheme.RED.get_html(False)
+                mpk_del_button.setStyleSheet("QPushButton { border: 2px solid "
+                                             + red + "; padding: 2px; border-radius: 2px; font-size: 11px; } " +
+                                             "QPushButton:hover { border: 2px solid "
+                                             + red_alt + "; padding: 2px; border-radius: 2px; font-size: 11px; } ")
+            if self.wallet.can_add_keystore():
+                add_but = QPushButton(_("Add Key..."))
+                marg: QMargins = add_but.contentsMargins()
+                marg.setLeft(marg.left() // 2)
+                marg.setRight(marg.right() // 2)
+                add_but.setContentsMargins(marg)
+                bottom_buttons.insertWidget(0, add_but, Qt.AlignLeft)
+                bottom_buttons.insertStretch(1, 2)
+                def on_click(checked):
+                    d = QDialog(parent=dialog)
+                    d.setWindowModality(Qt.WindowModal)
+                    d.setMinimumSize(400, 200)
+                    title = _("Add Master Key")
+                    d.setWindowTitle(title)
+                    message = '  '.join([
+                        _("Enter an xpub or xprv key to add to this wallet."),
+                        _("Addresses derived from this key will be a part of the wallet and will appear in this"
+                          " wallet's transaction history."),
+                        _("If adding an xprv key, this wallet will also be able to spend from these addresses."),
+                    ])
+                    cancel_but = CancelButton(d)
+                    cancel_but.setDefault(True)
+                    d.next_button = ok_but = QPushButton(_("Add Key"))  # KeysLayout widget expects this attribute
+                    ok_but.clicked.connect(d.accept)
+                    ok_but.setEnabled(False)
+                    l = KeysLayout(parent=d, title=message, allow_multi=False, is_valid=keystore.is_master_key)
+                    l.addLayout(Buttons(ok_but, cancel_but))
+                    d.setLayout(l)
+                    if d.exec_() == QDialog.Accepted:
+                        if self.wallet_add_xpub(l.get_text().strip()):
+                            dialog.close()
+                add_but.clicked.connect(on_click)
+            mpk_selected(labels_clayout, 0)
         vbox.addStretch(1)
-        vbox.addLayout(Buttons(CloseButton(dialog)))
+        vbox.addLayout(bottom_buttons)
         dialog.setLayout(vbox)
         dialog.exec_()
 
@@ -3343,7 +3400,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except BaseException as e:
             self.show_error(str(e))
             return
-        from .seed_dialog import SeedDialog
         d = SeedDialog(self.top_level_window(), seed, passphrase, derivation, seed_type)
         d.exec_()
 
@@ -5260,6 +5316,55 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.wallet.rebuild_history()
             except RuntimeError as e:
                 self.show_error(str(e))
+
+    def _wallet_delete_add_xpub_common(self):
+        if self.gui_object.warn_if_no_network(self):
+            # Don't allow if offline mode.
+            self.show_error(_("Operation not permitted in offline mode"))
+            return False
+        if not isinstance(self.wallet, MultiXPubWallet):
+            # Paranoia
+            self.show_error(_("Operation not permitted for this wallet type"))
+            return False
+        return True
+
+    def wallet_delete_xpub(self, index) -> bool:
+        if not self._wallet_delete_add_xpub_common():
+            return False
+        msg = ' '.join([
+            _('This feature is intended to allow you to remove an entire set of addresses from this wallet;'
+              ' those addresses that belong to the selected master key.'),
+            "\n\n"+_("In order to accomplish this task, your entire wallet's history must be rebuilt from the network,"
+                     " this time without the selected key's addresses."),
+            _('Just to be safe, back up your wallet file first!'),
+            "\n\n"+_("Delete this master key from the wallet now?")
+        ])
+        if not self.question(msg, title=_("Delete Master Key")):
+            return False
+        try:
+            self.wallet.delete_keystore(index, rebuild_history=True)
+        except (RuntimeError, ValueError) as e:
+            self.show_error(str(e))
+        return True
+
+    def wallet_add_xpub(self, master_key) -> bool:
+        if not self._wallet_delete_add_xpub_common():
+            return False
+        msg = ' '.join([
+            _('This feature is intended to allow you to add an entire set of addresses to this wallet;'
+              ' those addresses that belong to the master key you just inputted.'),
+            "\n\n"+_("In order to accomplish this task, your entire wallet's history must be rebuilt from the network,"
+                     " this time with the selected key's addresses."),
+            _('Just to be safe, back up your wallet file first!'),
+            "\n\n"+_("Add this master key to the wallet now?")
+        ])
+        if not self.question(msg, title=_("Add Master Key")):
+            return False
+        try:
+            self.wallet.add_keystore(master_key, rebuild_history=True)
+        except (RuntimeError, ValueError) as e:
+            self.show_error(str(e))
+        return True
 
     def scan_beyond_gap(self):
         if self.gui_object.warn_if_no_network(self):

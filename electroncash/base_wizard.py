@@ -196,7 +196,8 @@ class BaseWizard(util.PrintError):
                 _("To create a spending wallet, please enter a master private key (xprv/yprv/zprv)."),
                 "\n\n" + _("You may enter multiple xpub and/or xprv keys to create a multi-xpub wallet."),
             ])
-            self.add_xpub_dialog(title=title, message=message, run_next=self.on_restore_from_key, is_valid=is_valid)
+            self.add_xpub_dialog(title=title, message=message, run_next=self.on_restore_from_key, is_valid=is_valid,
+                                 allow_multi=True)
         else:
             i = len(self.keystores) + 1
             self.add_cosigner_dialog(index=i, run_next=self.on_restore_from_key, is_valid=keystore.is_bip32_key)
