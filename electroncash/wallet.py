@@ -408,7 +408,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return self.basename()
 
     def get_master_public_key(self):
+        """Subclasses that use master pubkeys should reimplement this"""
         return None
+
+    def get_master_public_keys(self):
+        """Subclasses that use master pubkeys should reimplement this"""
+        return []
 
     def load_keystore_wrapper(self):
         """ Loads the keystore, but also tries to preserve derivation(s). Older
