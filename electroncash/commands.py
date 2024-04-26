@@ -1106,6 +1106,8 @@ def add_global_options(parser):
     group.add_argument("--scalenet", action="store_true", dest="scalenet", default=False, help="Use Scalenet")
     group.add_argument("--chipnet", action="store_true", dest="chipnet", default=False, help="Use Chipnet")
     group.add_argument("--regtest", action="store_true", dest="regtest", default=False, help="Use Regtest")
+    group.add_argument("-C", "--console2", action="store_true", dest="console2", default=False,
+                       help=_("Use the advanced dev console for the console tab (Qt only)"))
 
 def get_parser():
     # create main parser

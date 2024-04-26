@@ -80,7 +80,10 @@ a = Analysis([home+MAIN_SCRIPT,
              binaries=binaries,
              datas=datas,
              hiddenimports=hiddenimports,
-             hookspath=[])
+             hookspath=[],
+             # Prevent the console2.py dev-only script from pulling-in qtconsole and ipython
+             excludes=["qtconsole", "ipython"],
+             )
 
 # http://stackoverflow.com/questions/19055089/pyinstaller-onefile-warning-pyconfig-h-when-importing-scipy-or-scipy-signal
 for d in a.datas:

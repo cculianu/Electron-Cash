@@ -33,6 +33,7 @@ import sys
 import threading
 import time
 import traceback
+import weakref
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 from collections import OrderedDict
@@ -3100,14 +3101,39 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.payment_request_error()
 
     def create_console_tab(self):
+        err_msg = ''
+        if self.config.cmdline_options.get("console2"):
+            try:
+                from .console2 import ConsoleWidget
+                self.console = console = ConsoleWidget()
+                if ColorScheme.dark_scheme:
+                    self.console.set_default_style("linux")
+                return console
+            except Exception as e:
+                stars = '*' * 10
+                err_msg = (f"{stars} WARNING! {stars}\n"
+                           f"Failed to start the advanced console, got exception: {e!r}\n\n"
+                           f"Be sure that the required modules are installed, by doing something like this from the"
+                           f" shell:\n$ python3 -m pip install ipython qtconsole --user\n\n"
+                           f"Or, alternatively, start Electron Cash without the --console2 and/or -C options.\n")
+
+        # Fallback to the old Electrum-style barebones console if above fails to import or is otherwise disabled
         from .console import Console
         self.console = console = Console(wallet=self.wallet)
+        if err_msg:
+            # Print the error message after a delay, to hopefully have it appear after server banner
+            weak_self = weakref.ref(self)
+
+            def show_msg():
+                slf = weak_self()
+                if slf:
+                    slf.console.showMessage(err_msg)
+            QTimer.singleShot(500, show_msg)
         return console
 
     def update_console(self):
         console = self.console
-        console.history = self.config.get("console-history",[])
-        console.history_index = len(console.history)
+        console.set_history(self.config.get("console-history",[]))
 
         console.updateNamespace({'wallet' : self.wallet,
                                  'network' : self.network,
@@ -3127,7 +3153,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             methods[m] = mkfunc(c._run, m)
 
         console.updateNamespace(methods)
-
 
     def create_status_bar(self):
 
@@ -5123,7 +5148,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # cleanly from.  So we attempt to exit as cleanly as possible.
         try:
             self.config.set_key("is_maximized", self.isMaximized())
-            self.config.set_key("console-history", self.console.history[-50:], True)
+            self.config.set_key("console-history", self.console.history_tail(50), True)
         except (OSError, PermissionError) as e:
             self.print_error("unable to write to config (directory removed?)", e)
 
