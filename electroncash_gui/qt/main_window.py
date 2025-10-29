@@ -4201,7 +4201,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             success = True
 
         def on_rejected():
-            nonlocal success, canceled
+            nonlocal canceled
             canceled = True
 
         # kick off the waiting dialog to do all of the above
