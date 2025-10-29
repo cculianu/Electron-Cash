@@ -4004,7 +4004,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         hbox.addWidget(QLabel(_("Timeout:")), 0, Qt.AlignRight)
         fee_time_sb = QSpinBox()
         fee_time_sb.setMinimum(10)
-        fee_time_sb.setMaximum(9999)
+        fee_time_sb.setMaximum(86_400 * 7)  # 1 week enough time for huge wallets to download all inputs?
         fee_time_sb.setSuffix(" " + _("seconds"))
         fee_time_sb.setValue(600)
         fee_dl_chk.clicked.connect(fee_time_w.setEnabled)
