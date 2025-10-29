@@ -4006,7 +4006,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         fee_time_sb.setMinimum(10)
         fee_time_sb.setMaximum(9999)
         fee_time_sb.setSuffix(" " + _("seconds"))
-        fee_time_sb.setValue(30)
+        fee_time_sb.setValue(600)
         fee_dl_chk.clicked.connect(fee_time_w.setEnabled)
         fee_time_w.setEnabled(fee_dl_chk.isChecked())
         hbox.addWidget(fee_time_sb, 0, Qt.AlignLeft)

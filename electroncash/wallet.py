@@ -53,7 +53,7 @@ from .util import (NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, prof
                    finalization_print_error, to_string, TimeoutException)
 from . import util
 
-from .address import Address, Script, ScriptOutput, PublicKey, OpCodes
+from .address import Address, Script, ScriptOutput, PublicKey, OpCodes, UnknownAddress
 from .bitcoin import *
 from .version import *
 from .keystore import load_keystore, Hardware_KeyStore, Imported_KeyStore, BIP32_KeyStore, xpubkey_to_address
@@ -2273,14 +2273,26 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 input_addresses = []
                 output_addresses = []
                 for i, x in enumerate(tx.inputs()):
-                    if x['type'] == 'coinbase': continue
-                    try:
-                        addr = x.get('address') or tx_maybe_has_fetched_inputs.fetched_inputs()[i].get('address')
-                    except IndexError:
-                        addr = None
-                    if addr is None:
+                    if x['type'] == 'coinbase':
                         continue
-                    input_addresses.append(addr.to_ui_string())
+                    addr = x.get('address')
+                    if addr is None or isinstance(addr, UnknownAddress):
+                        tx_maybe_has_fetched_inputs.inputs()  # Force deserialization
+                        try:
+                            addr = tx_maybe_has_fetched_inputs.fetched_inputs()[i].get('address')
+                        except IndexError:
+                            addr = None
+                    if addr is None:
+                        # Maybe missing fetched inputs, try to fetch them
+                        t_remain = time_remaining()
+                        if t_remain:  # But only if we have time remaining
+                            try_fetch_inputs(tx_maybe_has_fetched_inputs, t_remain)
+                            try:
+                                addr = tx_maybe_has_fetched_inputs.fetched_inputs()[i].get('address')
+                            except IndexError:
+                                addr = None
+                    if addr is not None:
+                        input_addresses.append(addr.to_ui_string())
                 for _type, addr, v in tx.outputs():
                     output_addresses.append(addr.to_ui_string())
                 item['input_addresses'] = input_addresses
