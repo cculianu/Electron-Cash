@@ -2195,13 +2195,26 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             else:
                 raise MissingTx(f'txid {tx_hash} dropped out of wallet history while exporting')
             return tx
+
+        def try_fetch_inputs(tx, timeout):
+            q = queue.Queue()
+
+            def done():
+                q.put(1)
+
+            if tx.fetch_input_data(self, use_network=bool(download_inputs), done_callback=done):
+                try:
+                    q.get(timeout=timeout)
+                except queue.Empty:
+                    pass
+
         def try_calc_fee(tx_hash):
             ''' Try to calc fee from cheapest to most expensive calculation.
             Ultimately asks the transaction class to look at prevouts in wallet and uses
             that scheme as a last (more CPU intensive) resort. '''
             fee = self.tx_fees.get(tx_hash)
             if fee is not None:
-                return fee
+                return fee, get_tx(tx_hash)
             def do_get_fee(tx_hash):
                 tx = get_tx(tx_hash)
                 def try_get_fee(tx):
@@ -2210,18 +2223,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 fee = try_get_fee(tx)
                 t_remain = time_remaining()
                 if fee is None and t_remain:
-                    q = queue.Queue()
-                    def done():
-                        q.put(1)
-                    tx.fetch_input_data(self, use_network=bool(download_inputs), done_callback=done)
-                    try: q.get(timeout=t_remain)
-                    except queue.Empty: pass
+                    try_fetch_inputs(tx, t_remain)
                     fee = try_get_fee(tx)
-                return fee
-            fee = do_get_fee(tx_hash)
+                return fee, tx
+            fee, tx = do_get_fee(tx_hash)
             if fee is not None:
                 self.tx_fees[tx_hash] = fee  # save fee to wallet if we bothered to dl/calculate it.
-            return fee
+            return fee, tx
         def fmt_amt(v, is_diff):
             if v is None:
                 return '--'
@@ -2245,7 +2253,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if to_timestamp and timestamp_safe >= to_timestamp:
                 continue
             try:
-                fee = try_calc_fee(tx_hash)
+                fee, tx_maybe_has_fetched_inputs = try_calc_fee(tx_hash)
             except MissingTx as e:
                 self.print_error(str(e))
                 continue
@@ -2264,10 +2272,14 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 tx = get_tx(tx_hash)
                 input_addresses = []
                 output_addresses = []
-                for x in tx.inputs():
+                for i, x in enumerate(tx.inputs()):
                     if x['type'] == 'coinbase': continue
-                    addr = x.get('address')
-                    if addr == None: continue
+                    try:
+                        addr = x.get('address') or tx_maybe_has_fetched_inputs.fetched_inputs()[i].get('address')
+                    except IndexError:
+                        addr = None
+                    if addr is None:
+                        continue
                     input_addresses.append(addr.to_ui_string())
                 for _type, addr, v in tx.outputs():
                     output_addresses.append(addr.to_ui_string())

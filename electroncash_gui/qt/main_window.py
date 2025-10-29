@@ -3992,7 +3992,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         include_addresses_chk.setChecked(True)
         include_addresses_chk.setToolTip(_("Include input and output addresses in history export"))
         vbox.addWidget(include_addresses_chk)
-        fee_dl_chk = QCheckBox(_("Fetch accurate fees from network (slower)"))
+        fee_dl_chk = QCheckBox(_("Download accurate fee and address info (slower)"))
         fee_dl_chk.setChecked(self.is_fetch_input_data())
         fee_dl_chk.setEnabled(bool(self.wallet.network))
         fee_dl_chk.setToolTip(_("If this is checked, accurate fee and input value data will be retrieved from the network"))
