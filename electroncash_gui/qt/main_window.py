@@ -3992,26 +3992,26 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         include_addresses_chk.setChecked(True)
         include_addresses_chk.setToolTip(_("Include input and output addresses in history export"))
         vbox.addWidget(include_addresses_chk)
-        fee_dl_chk = QCheckBox(_("Download accurate fee and address info (slower)"))
-        fee_dl_chk.setChecked(self.is_fetch_input_data())
-        fee_dl_chk.setEnabled(bool(self.wallet.network))
-        fee_dl_chk.setToolTip(_("If this is checked, accurate fee and input value data will be retrieved from the network"))
-        vbox.addWidget(fee_dl_chk)
-        fee_time_w = QWidget()
-        fee_time_w.setToolTip(_("The amount of overall time in seconds to allow for downloading fee data before giving up"))
-        hbox = QHBoxLayout(fee_time_w)
+        input_dl_chk = QCheckBox(_("Download accurate fee and address info (slower)"))
+        input_dl_chk.setChecked(self.is_fetch_input_data())
+        input_dl_chk.setEnabled(bool(self.wallet.network))
+        input_dl_chk.setToolTip(_("If this is checked, accurate fee and input addresses will be retrieved from the network"))
+        vbox.addWidget(input_dl_chk)
+        dl_time_w = QWidget()
+        dl_time_w.setToolTip(_("The amount of overall time in seconds to allow for downloading input data before giving up"))
+        hbox = QHBoxLayout(dl_time_w)
         hbox.setContentsMargins(20, 0, 0, 0)
         hbox.addWidget(QLabel(_("Timeout:")), 0, Qt.AlignRight)
-        fee_time_sb = QSpinBox()
-        fee_time_sb.setMinimum(10)
-        fee_time_sb.setMaximum(86_400 * 7)  # 1 week enough time for huge wallets to download all inputs?
-        fee_time_sb.setSuffix(" " + _("seconds"))
-        fee_time_sb.setValue(600)
-        fee_dl_chk.clicked.connect(fee_time_w.setEnabled)
-        fee_time_w.setEnabled(fee_dl_chk.isChecked())
-        hbox.addWidget(fee_time_sb, 0, Qt.AlignLeft)
+        dl_time_sb = QSpinBox()
+        dl_time_sb.setMinimum(1)
+        dl_time_sb.setMaximum(86_400 * 7)  # 1 week enough time for huge wallets to download all inputs?
+        dl_time_sb.setSuffix(" " + _("seconds"))
+        dl_time_sb.setValue(600)
+        input_dl_chk.clicked.connect(dl_time_w.setEnabled)
+        dl_time_w.setEnabled(input_dl_chk.isChecked())
+        hbox.addWidget(dl_time_sb, 0, Qt.AlignLeft)
         hbox.addStretch(1)
-        vbox.addWidget(fee_time_w)
+        vbox.addWidget(dl_time_w)
         vbox.addStretch(1)
         hbox = Buttons(CancelButton(d), OkButton(d, _('Export')))
         vbox.addLayout(hbox)
@@ -4027,17 +4027,24 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         success = False
         try:
             # minimum 10s time for calc. fees, etc
-            timeout = max(fee_time_sb.value() if fee_dl_chk.isChecked() else 10.0, 10.0)
-            success = self.do_export_history(filename, csv_button.isChecked(),
-                                             download_inputs=fee_dl_chk.isChecked(),
-                                             timeout=timeout,
-                                             include_addresses=include_addresses_chk.isChecked())
+            timeout = max(dl_time_sb.value() if input_dl_chk.isChecked() else 10.0, 10.0)
+            success, did_timeout_on_dl = self.do_export_history(filename, csv_button.isChecked(),
+                                                                download_inputs=input_dl_chk.isChecked(),
+                                                                timeout=timeout,
+                                                                include_addresses=include_addresses_chk.isChecked())
         except Exception as reason:
             export_error_label = _("Electron Cash was unable to produce a transaction history export.")
             self.show_critical(export_error_label + "\n" + str(reason), title=_("Unable to export transaction history"))
         else:
             if success:
-                self.show_message(_("Your wallet transaction history has been successfully exported."))
+                msg = _("Your wallet transaction history has been successfully exported.")
+                if did_timeout_on_dl:  # did get an input dl timeout
+                    msg += "\n\n" + _("However, some inputs failed to download due to timeout limits being hit.")
+                    self.show_warning(msg)
+                else:
+                    self.show_message(msg)
+            else:
+                self.show_message(_("User cancelled"))
 
     def export_token_history_dialog(self):
         d = WindowModalDialog(self.top_level_window(), _('Export Token History'))
@@ -4115,19 +4122,43 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not wallet:
             return
         dlg = None  # this will be set at the bottom of this function
+
+        did_time_out_on_input_dl = False
+        canceled = False
+
+        def did_timeout():
+            nonlocal did_time_out_on_input_dl
+            did_time_out_on_input_dl = True
+
+        class UserCanceled(Exception):
+            pass
+
         def task():
+
             def update_prog(x):
-                if dlg: dlg.update_progress(int(x*100))
-            return wallet.export_history(fx=self.fx,
-                                         show_addresses=include_addresses,
-                                         decimal_point=self.decimal_point,
-                                         fee_calc_timeout=timeout,
-                                         download_inputs=download_inputs,
-                                         progress_callback=update_prog,
-                                         receives_before_sends=True)
+                if canceled:
+                    raise UserCanceled()
+                if dlg:
+                    dlg.update_progress(int(x * 100))
+
+            try:
+                return wallet.export_history(fx=self.fx,
+                                             show_addresses=include_addresses,
+                                             decimal_point=self.decimal_point,
+                                             fee_calc_timeout=timeout,
+                                             download_inputs=download_inputs,
+                                             progress_callback=update_prog,
+                                             receives_before_sends=True,
+                                             fee_calc_timeout_callback=did_timeout)
+            except UserCanceled:
+                return None
+
         success = False
+
         def on_success(history):
             nonlocal success
+            if history is None or canceled:
+                return
             ccy = (self.fx and self.fx.get_currency()) or ''
             has_fiat_columns = history and self.fx and self.fx.show_history() and 'fiat_value' in history[0] and 'fiat_balance' in history[0] and 'fiat_fee' in history[0]
             lines = []
@@ -4168,14 +4199,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 else:
                     f.write(json.dumps(lines, indent=4))
             success = True
+
+        def on_rejected():
+            nonlocal success, canceled
+            canceled = True
+
         # kick off the waiting dialog to do all of the above
         dlg = WaitingDialog(self.top_level_window(),
                             _("Exporting history, please wait ..."),
-                            task, on_success, self.on_error, disable_escape_key=True,
+                            task, on_success, self.on_error, disable_escape_key=False,
                             auto_exec=False, auto_show=False, progress_bar=True, progress_min=0, progress_max=100)
+        dlg.rejected.connect(on_rejected)
         dlg.exec_()
         # this will block heere in the WaitingDialog event loop... and set success to True if success
-        return success
+        return success, did_time_out_on_input_dl
 
     def do_export_token_history(self, file_name, is_csv, fetch_missing_meta=False, timeout=30.0):
         wallet = self.wallet
