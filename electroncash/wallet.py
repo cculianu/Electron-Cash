@@ -3472,8 +3472,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         l = []
         for txo, x in received.items():
             h, v, is_cb, token_data = x
-            if tokenreq and token_data and (category_id is None or token_data.id_hex == category_id):
-                v = token_data.amount
+            if tokenreq:
+                if token_data and (category_id is None or token_data.id_hex == category_id):
+                    v = token_data.amount
+                else:
+                    continue
             txid, n = txo.split(':')
             info = self.verified_tx.get(txid)
             if info:
