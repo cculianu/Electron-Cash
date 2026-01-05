@@ -220,15 +220,23 @@ class DaemonThread(threading.Thread, PrintError):
             self._jobs2rm.update(jobs)
 
     def run_jobs(self):
+        # Make a copy of the jobs list while holding the lock
         with self.job_lock:
-            for job in self.jobs:
-                try:
-                    job.run()
-                except Exception as e:
-                    # Don't let a throwing job disrupt the thread, future runs of
-                    # itself, or other jobs.  This is useful protection against
-                    # malformed or malicious server responses
-                    traceback.print_exc(file=sys.stderr)
+            jobs_copy = list(self.jobs)
+
+        # Execute jobs without holding the lock to avoid deadlock when jobs
+        # block (e.g. showing modal dialogs)
+        for job in jobs_copy:
+            try:
+                job.run()
+            except Exception as e:
+                # Don't let a throwing job disrupt the thread, future runs of
+                # itself, or other jobs.  This is useful protection against
+                # malformed or malicious server responses
+                traceback.print_exc(file=sys.stderr)
+
+        # Now handle job additions/removals while holding the lock
+        with self.job_lock:
             # below is support for jobs adding/removing themselves
             # during their run implementation.
             for addjob in self._jobs2add:
