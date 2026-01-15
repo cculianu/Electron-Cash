@@ -65,7 +65,7 @@ mainnet_block_explorers = {
     'Loping.net': ('https://bch.loping.net',
                    Address.FMT_CASHADDR,
                    {'tx': 'tx', 'addr': 'address', 'block': 'block-height'}),
-    "Melroy's BCH Explorer": ('https://explorer.melroy.org',
+    "BCH Explorer": ('https://bchexplorer.cash',
                               Address.FMT_CASHADDR,
                               {'tx': 'tx', 'addr': 'address', 'block': 'block'}),
     '3XPL': ('https://3xpl.com/bitcoin-cash',
