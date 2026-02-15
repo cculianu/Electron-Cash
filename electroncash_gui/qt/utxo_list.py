@@ -3,6 +3,9 @@
 # Electrum - lightweight Bitcoin client
 # Copyright (C) 2015 Thomas Voegtlin
 #
+# Electron Cash - lightweight Bitcoin Cash client
+# Copyright (C) 2017-2026 The Electron Cash Developers
+#
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
 # (the "Software"), to deal in the Software without restriction,
@@ -23,17 +26,17 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .util import *
-from electroncash.i18n import _, ngettext
-from electroncash.plugins import run_hook
 from electroncash.address import Address
 from electroncash.bitcoin import COINBASE_MATURITY
-from electroncash import cashacct
+from electroncash.i18n import _, ngettext
+from electroncash.plugins import run_hook
+from electroncash.util import profiler, PrintError
 from collections import defaultdict
 from functools import wraps
 from enum import IntEnum
 
 
-class UTXOList(MyTreeWidget):
+class UTXOList(MyTreeWidget, PrintError):
     class Col(IntEnum):
         '''Column numbers. This is to make code in on_update easier to read.
         If you modify these, make sure to modify the column header names in
@@ -79,6 +82,9 @@ class UTXOList(MyTreeWidget):
 
         self.cleaned_up = False
 
+    def diagnostic_name(self):
+        return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
+
     def clean_up(self):
         self.cleaned_up = True
         try: self.parent.ca_address_default_changed_signal.disconnect(self._ca_on_address_default_change)
@@ -110,6 +116,7 @@ class UTXOList(MyTreeWidget):
         super().update()
 
     @if_not_dead
+    @profiler
     def on_update(self):
         local_maturity_height = (self.wallet.get_local_height()+1) - COINBASE_MATURITY
         prev_selection = self.get_selected() # cache previous selection, if any
@@ -128,6 +135,7 @@ class UTXOList(MyTreeWidget):
             del addr_set  # clean-up. We don't want the below code to ever depend on the existence of this cell.
         else:
             self.utxos = self.wallet.get_utxos(exclude_slp=False, exclude_tokens=False)
+        self._update_utxo_count_display(len(self.utxos))
         for x in self.utxos:
             address = x['address']
             address_text = address.to_ui_string()
@@ -207,7 +215,6 @@ class UTXOList(MyTreeWidget):
             if name in prev_selection:
                 # NB: This needs to be here after the item is added to the widget. See #979.
                 utxo_item.setSelected(True) # restore previous selection
-        self._update_utxo_count_display(len(self.utxos))
 
     def _update_utxo_count_display(self, num_utxos: int):
         headerItem = self.headerItem()
