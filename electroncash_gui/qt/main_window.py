@@ -2007,22 +2007,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_token_c_active_state(self):
         coin_list_is_hidden = len(self.pay_from) == 0
-        # We only support sending tokens in the "single payee mode" where no commas ',' appear, and where
-        # the destination is an address and not a ScriptOutput
-        payee = self.payto_e.get_recipient()
-        try:
-            payee = payee and isinstance(payee[1], Address) and payee[1]
-        except:
-            payee = None
-        # And also there must be no parse errors either
-        is_valid_payee_no_errors = payee and not self.payto_e.get_errors()
-        if coin_list_is_hidden and is_valid_payee_no_errors:
-            # Enabled: No coin control and has 1 valid payee
-            self.token_c.setDisabled(False)
-        else:
+        if not coin_list_is_hidden or self.payto_e.is_multiline():
             # Disable token mode
             self.token_c.setDisabled(True)
             self.token_c.setCurrentIndex(0)
+        else:
+            self.token_c.setDisabled(False)
+
 
     def spend_max(self):
         self.max_button.setChecked(True)
@@ -2409,10 +2400,27 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def read_send_token_tab(self):
         token_id = self.token_c.currentData(TokenSendComboBox.DataRoles.token_id)
 
+        errors = self.payto_e.get_errors()
+        if errors:
+            self.show_error(_("Invalid lines found:") + "\n\n" + '\n'.join(
+                [_("Line #") + str(x[0] + 1) + ": " + x[1] for x in errors]))
+            return
+
         recipient = self.payto_e.get_recipient()
         if not recipient:
             self.show_error(_('No outputs'))
             return
+
+        # We only support sending tokens in the "single payee mode" where no commas ',' appear, and where
+        # the destination is an address and not a ScriptOutput
+        if not (isinstance(recipient[1], Address) and recipient[1]):
+            self.show_error(_('Invalid address'))
+            return
+        if self.payto_e.is_multiline():
+            self.show_error(_('Pay to Many not supported'))
+            return
+
+
         addr_type, addr = recipient
 
         tx_desc = self.message_e.text()
