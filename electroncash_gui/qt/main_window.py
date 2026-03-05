@@ -2098,7 +2098,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if self.max_button.isChecked():
                 if self.is_token_tx:
                     try:
-                        amount = self.send_token_util.estimate_max_bch_amount()
+                        token_id = self.token_c.currentData(TokenSendComboBox.DataRoles.token_id)
+                        amount = self.send_token_util.estimate_max_bch_amount(token_id)
                         self.not_enough_funds = False
                     except NotEnoughFunds:
                         self.not_enough_funds = True

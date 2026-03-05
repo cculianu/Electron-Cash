@@ -146,10 +146,10 @@ class TokenSendUtil(PrintError):
     def get_outpoint_longname(utxo) -> str:
         return f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
 
-    def estimate_max_bch_amount(self):
+    def estimate_max_bch_amount(self, token_id=None):
         # make a dummy token spec
         tokens, _ = self.get_wallet_fungible_only_tokens()
-        dummy_tid = next(iter(tokens))
+        dummy_tid = token_id if token_id else next(iter(tokens))
         dummy_amount = tokens[dummy_tid][0]['token_data'].amount
         spec = self.get_ft_send_spec(None, dummy_tid, dummy_amount, tokens, dummy=True)
 
