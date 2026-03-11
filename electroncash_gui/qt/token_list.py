@@ -54,6 +54,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         num_utxos = 6
         bch_amount = 7
         output_pt = 8
+        address = 9
 
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
@@ -71,7 +72,7 @@ class TokenList(MyTreeWidget, util.PrintError):
     def __init__(self, parent: ElectrumWindow):
         assert isinstance(parent, ElectrumWindow)
         columns = [_('Category'), _('Fungible Amount'), _('NFTs'), '', '', _('Capability'), _('Num UTXOs'),
-                   self.amount_heading.format(unit=parent.base_unit()), _('Output Point')]
+                   self.amount_heading.format(unit=parent.base_unit()), _('Output Point'), _('Address')]
         super().__init__(parent=parent, create_menu=self.create_menu, headers=columns,
                          stretch_column=None, deferred_updates=True,
                          save_sort_settings=True)
@@ -105,6 +106,8 @@ class TokenList(MyTreeWidget, util.PrintError):
             self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
         self.setTextElideMode(QtCore.Qt.ElideRight)
 
+        self.parent.gui_object.cashaddr_toggled_signal.connect(self.update)
+
     def diagnostic_name(self):
         return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
 
@@ -135,6 +138,15 @@ class TokenList(MyTreeWidget, util.PrintError):
     @staticmethod
     def get_outpoint_longname(utxo):
         return f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
+
+    @classmethod
+    def get_address_short(cls, utxo):
+        return cls.elide(utxo['address'].to_ui_string(), 12)
+
+    @staticmethod
+    def get_address_long(utxo):
+        return utxo['address'].to_ui_string()
+
 
     @staticmethod
     def elide(s: str, elide_threshold=32) -> str:
@@ -218,6 +230,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                     item.setFont(col, self.fixed_width_larger)
             item.setFont(self.Col.nft_flags, self.smaller_font)
             item.setFont(self.Col.output_pt, self.fixed_width)
+            item.setFont(self.Col.address, self.fixed_width)
             # Lastly, realign the quantity, num_nfts, and num_utxos columns
             for col, align in ((self.Col.quantity, QtCore.Qt.AlignRight),
                                (self.Col.nfts, QtCore.Qt.AlignCenter),
@@ -264,7 +277,8 @@ class TokenList(MyTreeWidget, util.PrintError):
             num_utxos = "1"
             outpt_shortname = self.get_outpoint_shortname(utxo)
             bch_amt = self.parent.format_amount(utxo['value'], is_diff=False, whitespaces=True)
-            stwi = SortableTreeWidgetItem([name, amt, num_nfts, "", "", nft_flags, num_utxos, bch_amt, outpt_shortname])
+            addr = self.get_address_short(utxo)
+            stwi = SortableTreeWidgetItem([name, amt, num_nfts, "", "", nft_flags, num_utxos, bch_amt, outpt_shortname, addr])
             stwi.setData(0, self.DataRoles.item_key, item_key)
             stwi.setData(0, self.DataRoles.token_id, tid)
             stwi.setData(0, self.DataRoles.utxos, [utxo])
@@ -285,6 +299,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                 # address is frozen, coin is not frozen
                 # emulate the "Look" off the address_list .py's frozen entry
                 stwi.setBackground(0, self.light_blue)
+                stwi.setBackground(9, self.light_blue)
                 tool_tip_misc = _("Address is frozen")
             elif c_frozen and not a_frozen:
                 # coin is frozen, address is not frozen
@@ -294,6 +309,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                 # both coin and address are frozen so color-code it to indicate that.
                 stwi.setBackground(0, self.light_blue)
                 stwi.setForeground(0, self.cyan_blue)
+                stwi.setBackground(9, self.light_blue)
                 tool_tip_misc = _("Coin & Address are frozen")
             else:
                 tool_tip_misc = ""
@@ -323,7 +339,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             bch_amt = self.parent.format_amount(sum(x['value'] for x in utxo_list), is_diff=False, whitespaces=True)
 
             token_display_name = self.token_meta.format_token_display_name(token_id)
-            item = SortableTreeWidgetItem([token_display_name, quantity, nfts, "", "", nft_flags, num_utxos, bch_amt, ""])
+            item = SortableTreeWidgetItem([token_display_name, quantity, nfts, "", "", nft_flags, num_utxos, bch_amt, "", ""])
             item.setData(0, self.DataRoles.item_key, item_key)
             item.setData(0, self.DataRoles.token_id, token_id)
             item.setData(0, self.DataRoles.utxos, utxo_list)
@@ -366,7 +382,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                     bch_amt = self.parent.format_amount(sum(x['value'] for x in ft_only_utxo_list), is_diff=False,
                                                         whitespaces=True)
                     ft_parent = SortableTreeWidgetItem([name, ft_amt, "0", "", "", "", str(len(ft_only_utxo_list)),
-                                                        bch_amt, ""])
+                                                        bch_amt, "", ""])
                     ft_parent.setData(0, self.DataRoles.item_key, item_key)
                     ft_parent.setData(0, self.DataRoles.token_id, token_id)
                     ft_parent.setData(0, self.DataRoles.utxos, ft_only_utxo_list)
@@ -422,7 +438,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                     num_utxos = str(len(utxo_list))
                     bch_amt = self.parent.format_amount(sum(x['value'] for x in utxo_list), is_diff=False,
                                                         whitespaces=True)
-                    nft_parent = SortableTreeWidgetItem([name, ft_amt, nfts, "", "", nft_flags, num_utxos,bch_amt, ""])
+                    nft_parent = SortableTreeWidgetItem([name, ft_amt, nfts, "", "", nft_flags, num_utxos,bch_amt, "", ""])
                     nft_parent.setData(0, self.DataRoles.item_key, item_key)
                     nft_parent.setData(0, self.DataRoles.token_id, token_id)
                     nft_parent.setData(0, self.DataRoles.utxos, utxo_list)
@@ -581,6 +597,8 @@ class TokenList(MyTreeWidget, util.PrintError):
                             insert_cat_text = item.text(self.Col.category)
                     elif col == self.Col.output_pt and is_leaf_utxo:
                         copy_text = self.get_outpoint_longname(utxos[0])
+                    elif col == self.Col.address and is_leaf_utxo:
+                        copy_text = self.get_address_long(utxos[0])
                     else:
                         copy_text = item.text(col).strip()
                     if nft_utxo:
@@ -630,6 +648,10 @@ class TokenList(MyTreeWidget, util.PrintError):
                                 ul = item.data(0, self.DataRoles.utxos)
                                 if len(ul) == 1:
                                     return self.get_outpoint_longname(ul[0])
+                            elif col == self.Col.address and item.childCount() == 0:
+                                ul = item.data(0, self.DataRoles.utxos)
+                                if len(ul) == 1:
+                                    return self.get_address_long(ul[0])
                             return item.text(col).strip()
                         texts = [get_text(i) for i in selected if get_text(i) and get_text(i) != '-']
                         alt_copy_texts = [i.data(0, self.DataRoles.token_id) + ", " + get_text(i)
