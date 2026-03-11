@@ -59,10 +59,11 @@ class TokenList(MyTreeWidget, util.PrintError):
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
         item_key = QtCore.Qt.UserRole  # This is also the wallet label key
-        token_id = QtCore.Qt.UserRole + 1
-        utxos = QtCore.Qt.UserRole + 2
-        nft_utxo = QtCore.Qt.UserRole + 3
-        frozen_flags = QtCore.Qt.UserRole + 4  # Flags address/coin-level freeze: None or "" or "a" or "c" or "ac"
+        token_name = QtCore.Qt.UserRole + 1
+        token_id = QtCore.Qt.UserRole + 2
+        utxos = QtCore.Qt.UserRole + 3
+        nft_utxo = QtCore.Qt.UserRole + 4
+        frozen_flags = QtCore.Qt.UserRole + 5  # Flags address/coin-level freeze: None or "" or "a" or "c" or "ac"
 
     filter_columns = [Col.category]
     default_sort = MyTreeWidget.SortSpec(Col.category, QtCore.Qt.AscendingOrder)  # sort by token_id, ascending
@@ -280,6 +281,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             addr = self.get_address_short(utxo)
             stwi = SortableTreeWidgetItem([name, amt, num_nfts, "", "", nft_flags, num_utxos, bch_amt, outpt_shortname, addr])
             stwi.setData(0, self.DataRoles.item_key, item_key)
+            stwi.setData(0, self.DataRoles.token_name, self.token_meta.get_token_display_name(token_id) or '')
             stwi.setData(0, self.DataRoles.token_id, tid)
             stwi.setData(0, self.DataRoles.utxos, [utxo])
             set_fonts(stwi)
@@ -341,6 +343,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             token_display_name = self.token_meta.format_token_display_name(token_id)
             item = SortableTreeWidgetItem([token_display_name, quantity, nfts, "", "", nft_flags, num_utxos, bch_amt, "", ""])
             item.setData(0, self.DataRoles.item_key, item_key)
+            item.setData(0, self.DataRoles.token_name, self.token_meta.get_token_display_name(token_id) or '')
             item.setData(0, self.DataRoles.token_id, token_id)
             item.setData(0, self.DataRoles.utxos, utxo_list)
             item.setData(0, self.DataRoles.nft_utxo, None)
