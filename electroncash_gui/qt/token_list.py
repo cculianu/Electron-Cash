@@ -281,7 +281,8 @@ class TokenList(MyTreeWidget, util.PrintError):
             addr = self.get_address_short(utxo)
             stwi = SortableTreeWidgetItem([name, amt, num_nfts, "", "", nft_flags, num_utxos, bch_amt, outpt_shortname, addr])
             stwi.setData(0, self.DataRoles.item_key, item_key)
-            stwi.setData(0, self.DataRoles.token_name, self.token_meta.get_token_display_name(token_id) or '')
+            token_name = self.token_meta.get_token_display_name(token_id) or ''
+            stwi.setData(0, self.DataRoles.token_name, (token_name == '', token_name.lower()))
             stwi.setData(0, self.DataRoles.token_id, tid)
             stwi.setData(0, self.DataRoles.utxos, [utxo])
             set_fonts(stwi)
@@ -343,7 +344,8 @@ class TokenList(MyTreeWidget, util.PrintError):
             token_display_name = self.token_meta.format_token_display_name(token_id)
             item = SortableTreeWidgetItem([token_display_name, quantity, nfts, "", "", nft_flags, num_utxos, bch_amt, "", ""])
             item.setData(0, self.DataRoles.item_key, item_key)
-            item.setData(0, self.DataRoles.token_name, self.token_meta.get_token_display_name(token_id) or '')
+            token_name = self.token_meta.get_token_display_name(token_id) or ''
+            item.setData(0, self.DataRoles.token_name, (token_name == '', token_name.lower()))
             item.setData(0, self.DataRoles.token_id, token_id)
             item.setData(0, self.DataRoles.utxos, utxo_list)
             item.setData(0, self.DataRoles.nft_utxo, None)
