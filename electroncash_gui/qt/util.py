@@ -606,7 +606,7 @@ class MyTreeWidget(QTreeWidget):
 
     def __init__(self, parent, create_menu, headers, stretch_column=None,
                  editable_columns=None,
-                 *, deferred_updates=False, save_sort_settings=False):
+                 *, deferred_updates=False, save_sort_settings=False, save_column_visual_order_settings=True):
         QTreeWidget.__init__(self, parent)
         self.parent = parent
         self.config = self.parent.config
@@ -624,6 +624,7 @@ class MyTreeWidget(QTreeWidget):
         self.deferred_updates = deferred_updates
         self.deferred_update_ct, self._forced_update = 0, False
         self._save_sort_settings = save_sort_settings
+        self._save_column_visual_order_settings = save_column_visual_order_settings
 
         # Control which columns are editable
         self.editor = None
@@ -638,6 +639,7 @@ class MyTreeWidget(QTreeWidget):
 
         self._setup_save_sort_mechanism()
         self._setup_save_column_visibility_mechanism()
+        self._setup_save_column_visual_order_mechanism()
 
     def _setup_save_sort_mechanism(self):
         if (self._save_sort_settings
@@ -691,6 +693,34 @@ class MyTreeWidget(QTreeWidget):
                         storage.put(key, self.column_visibility)
                 self.column_visibility_changed_signal.connect(save_column_visibility)
 
+    def _setup_save_column_visual_order_mechanism(self):
+        if self._save_column_visual_order_settings and isinstance(getattr(self.parent, 'wallet', None), Abstract_Wallet):
+            storage = self.parent.wallet.storage
+            key = f'mytreewidget_column_visual_order_{type(self).__name__}'
+            column_visual_order = (storage and storage.get(key, None))
+            if (
+                column_visual_order
+                and isinstance(column_visual_order, list)
+                and all(isinstance(li, list) for li in column_visual_order)
+                and all(isinstance(i, int) for li in column_visual_order for i in li)
+                and self.header().count() == len(column_visual_order)
+            ):
+                for logicalIndex, visualIndex in column_visual_order:
+                    current_visual_index = self.header().visualIndex(logicalIndex)
+                    self.header().moveSection(current_visual_index, visualIndex)
+            if storage:
+                # Paranoia; hold a weak reference just in case subclass code
+                # does unusual things.
+                weakStorage = Weak.ref(storage)
+                def save_column_visual_order():
+                    storage = weakStorage()
+                    if storage:
+                        column_visual_order = list()
+                        for i in range(self.header().count()):
+                            column_visual_order.append((i, self.header().visualIndex(i),))
+                        storage.put(key, column_visual_order)
+                self.header().sectionMoved.connect(save_column_visual_order)
+
     def create_header_context_menu(self, position):
         menu = QMenu()
         for col in range(self.columnCount()):
@@ -717,6 +747,7 @@ class MyTreeWidget(QTreeWidget):
             self.header().setSectionResizeMode(col, sm)
         self._set_default_column_visibility()
         self._setup_save_column_visibility_mechanism()
+        self._setup_save_column_visual_order_mechanism()
 
     def editItem(self, item, column):
         if item and column in self.editable_columns:
