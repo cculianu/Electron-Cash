@@ -233,10 +233,8 @@ class TokenList(MyTreeWidget, util.PrintError):
             item.setFont(self.Col.output_pt, self.fixed_width)
             item.setFont(self.Col.address, self.fixed_width)
             # Lastly, realign the quantity, num_nfts, and num_utxos columns
-            for col, align in ((self.Col.quantity, QtCore.Qt.AlignRight),
-                               (self.Col.nfts, QtCore.Qt.AlignCenter),
-                               (self.Col.num_utxos, QtCore.Qt.AlignCenter)):
-                item.setTextAlignment(col, align)
+            for col in (self.Col.quantity, self.Col.nfts, self.Col.num_utxos):
+                item.setTextAlignment(col, QtCore.Qt.AlignRight)
 
         def set_icons_inner(item: SortableTreeWidgetItem, num_minting, num_mutable, toplevel=False, leaf=False):
             assert not (toplevel and leaf)
