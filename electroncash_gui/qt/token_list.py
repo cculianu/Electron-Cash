@@ -75,7 +75,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         columns = [_('Category'), _('Fungible Amount'), _('NFTs'), '', '', _('Capability'), _('Num UTXOs'),
                    self.amount_heading.format(unit=parent.base_unit()), _('Output Point'), _('Address')]
         super().__init__(parent=parent, create_menu=self.create_menu, headers=columns,
-                         stretch_column=None, deferred_updates=True,
+                         stretch_column=self.Col.category, deferred_updates=True,
                          save_sort_settings=True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
