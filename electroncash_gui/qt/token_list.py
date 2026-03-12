@@ -125,6 +125,38 @@ class TokenList(MyTreeWidget, util.PrintError):
                 func(self, *args, **kwargs)
         return wrapper
 
+    def filter(self, p):
+        super().filter(p)
+        # Since super().filter() does not handle top-level items, we explicitly hide them if
+        # they don't match or have no matching children.
+        columns = self.__class__.filter_columns
+        data_columns = self.__class__.filter_data_columns
+        if not columns and not data_columns:
+            return
+        p = p.lower()
+        self.current_filter = p
+        bad_data_column = False
+        data_role = self.__class__.filter_data_role
+
+        topLevelitems = [self.topLevelItem(i) for i in range(self.topLevelItemCount())]
+        for item in topLevelitems:
+            no_match_text = all(item.text(column).lower().find(p) == -1
+                                for column in columns)
+            no_match_data = True
+            if no_match_text and not bad_data_column and data_columns:
+                try:
+                    # data matching is different -- it must match exactly the
+                    # specified search string. This was originally designed
+                    # to allow for tx-hash searching of the history list.
+                    no_match_data = all(item.data(column, data_role).strip().lower() != p
+                                        for column in data_columns)
+                except (AttributeError, TypeError, ValueError):
+                    # flag so we don't keep raising for each iteration of this
+                    # loop.  Programmer error here in subclass, silently ignore.
+                    bad_data_column = True
+            no_visible_child = all(item.child(i).isHidden() for i in range(item.childCount()))
+            item.setHidden(no_match_text and no_match_data and no_visible_child)
+
     @rate_limited(1.0, ts_after=True)  # performance tweak -- limit updates to no more than once per second
     def update(self):
         if self.cleaned_up:
