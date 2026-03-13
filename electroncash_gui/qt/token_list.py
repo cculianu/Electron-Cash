@@ -115,6 +115,10 @@ class TokenList(MyTreeWidget, util.PrintError):
 
         self.parent.gui_object.cashaddr_toggled_signal.connect(self.update)
 
+        # Calling these here to prevent the self.header().sectionResized signal from overriding user preferences
+        self._save_column_widths_setting = True
+        self._setup_save_column_widths_mechanism()
+
     def diagnostic_name(self):
         return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
 
