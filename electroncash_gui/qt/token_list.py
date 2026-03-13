@@ -101,11 +101,17 @@ class TokenList(MyTreeWidget, util.PrintError):
         self.token_meta: TokenMetaQt = self.parent.token_meta
         self.header().setMinimumSectionSize(21)
         for col in (self.Col.cap_icon_main, self.Col.cap_icon_extra):
-            self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
+            # self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
             self.header().resizeSection(col, 21)
-        for col in (self.Col.nft_flags,):
-            self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
+        # for col in (self.Col.nft_flags,):
+        #     self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
         self.setTextElideMode(QtCore.Qt.ElideRight)
+
+        for col in self.Col:
+            if col == self.Col.category:
+                # Col.category is passed as stretch_column
+                continue
+            self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
 
         self.parent.gui_object.cashaddr_toggled_signal.connect(self.update)
 
