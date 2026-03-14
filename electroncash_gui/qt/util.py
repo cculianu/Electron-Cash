@@ -576,6 +576,8 @@ class ElectrumItemDelegate(QStyledItemDelegate):
 
 class MyTreeWidget(QTreeWidget):
 
+    column_visibility_changed_signal = pyqtSignal()
+
     class SortSpec(namedtuple("SortSpec", "column, qt_sort_order")):
         ''' Used to specify member: default_sort '''
 
@@ -603,14 +605,18 @@ class MyTreeWidget(QTreeWidget):
     filter_data_role : int = Qt.UserRole
 
     def __init__(self, parent, create_menu, headers, stretch_column=None,
-                 editable_columns=None,
-                 *, deferred_updates=False, save_sort_settings=False):
+                 editable_columns=None, *, deferred_updates=False, save_sort_settings=False,
+                 save_column_visual_order_settings=True, save_column_widths_setting=False):
         QTreeWidget.__init__(self, parent)
         self.parent = parent
         self.config = self.parent.config
         self.stretch_column = stretch_column
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(create_menu)
+        self.column_visibility = list()
+        self.header().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.header().customContextMenuRequested.connect(self.create_header_context_menu)
+
         self.setUniformRowHeights(True)
         # extend the syntax for consistency
         self.addChild = self.addTopLevelItem
@@ -618,6 +624,8 @@ class MyTreeWidget(QTreeWidget):
         self.deferred_updates = deferred_updates
         self.deferred_update_ct, self._forced_update = 0, False
         self._save_sort_settings = save_sort_settings
+        self._save_column_visual_order_settings = save_column_visual_order_settings
+        self._save_column_widths_setting = save_column_widths_setting
 
         # Control which columns are editable
         self.editor = None
@@ -631,6 +639,9 @@ class MyTreeWidget(QTreeWidget):
         self.current_filter = ""
 
         self._setup_save_sort_mechanism()
+        self._setup_save_column_visibility_mechanism()
+        self._setup_save_column_visual_order_mechanism()
+        self._setup_save_column_widths_mechanism()
 
     def _setup_save_sort_mechanism(self):
         if (self._save_sort_settings
@@ -654,6 +665,110 @@ class MyTreeWidget(QTreeWidget):
             self.setSortingEnabled(True)
             self.sortByColumn(self.default_sort[0], self.default_sort[1])
 
+    def toggle_column(self, index, checked, emit_signal=False):
+        self.column_visibility[index] = checked
+        self.setColumnHidden(index, not checked)
+        if emit_signal:
+            self.column_visibility_changed_signal.emit()
+
+    def _setup_save_column_visibility_mechanism(self):
+        if isinstance(getattr(self.parent, 'wallet', None), Abstract_Wallet):
+            storage = self.parent.wallet.storage
+            key = f'mytreewidget_column_visibility_{type(self).__name__}'
+            column_visibility = (storage and storage.get(key, None)) or self._set_default_column_visibility()
+            if (
+                column_visibility
+                and isinstance(column_visibility, list)
+                and all(isinstance(i, bool) for i in column_visibility)
+                and self.header().count() == len(column_visibility)
+                and any(column_visibility)
+            ):
+                for index, checked in enumerate(column_visibility):
+                    self.toggle_column(index, checked, emit_signal=False)
+            if storage:
+                # Paranoia; hold a weak reference just in case subclass code
+                # does unusual things.
+                weakStorage = Weak.ref(storage)
+                def save_column_visibility():
+                    storage = weakStorage()
+                    if storage:
+                        storage.put(key, self.column_visibility)
+                self.column_visibility_changed_signal.connect(save_column_visibility)
+
+    def _setup_save_column_visual_order_mechanism(self):
+        if self._save_column_visual_order_settings and isinstance(getattr(self.parent, 'wallet', None), Abstract_Wallet):
+            storage = self.parent.wallet.storage
+            key = f'mytreewidget_column_visual_order_{type(self).__name__}'
+            column_visual_order = (storage and storage.get(key, None))
+            if (
+                column_visual_order
+                and isinstance(column_visual_order, list)
+                and all(isinstance(li, list) for li in column_visual_order)
+                and all(isinstance(i, int) for li in column_visual_order for i in li)
+                and self.header().count() == len(column_visual_order)
+            ):
+                for logicalIndex, visualIndex in column_visual_order:
+                    current_visual_index = self.header().visualIndex(logicalIndex)
+                    self.header().moveSection(current_visual_index, visualIndex)
+            if storage:
+                # Paranoia; hold a weak reference just in case subclass code
+                # does unusual things.
+                weakStorage = Weak.ref(storage)
+                def save_column_visual_order():
+                    storage = weakStorage()
+                    if storage:
+                        column_visual_order = list()
+                        for i in range(self.header().count()):
+                            column_visual_order.append((i, self.header().visualIndex(i),))
+                        storage.put(key, column_visual_order)
+                self.header().sectionMoved.connect(save_column_visual_order)
+
+    def _setup_save_column_widths_mechanism(self):
+        # Warning: This method may override user preferences if called before
+        # subsequent size adjustments made in the code.
+        if self._save_column_widths_setting and isinstance(getattr(self.parent, 'wallet', None), Abstract_Wallet):
+            storage = self.parent.wallet.storage
+            key = f'mytreewidget_column_widths_{type(self).__name__}'
+            column_widths = (storage and storage.get(key, None))
+            if (
+                column_widths
+                and isinstance(column_widths, list)
+                and all(isinstance(li, list) for li in column_widths)
+                and all(isinstance(i, int) for li in column_widths for i in li)
+                and self.header().count() == len(column_widths)
+            ):
+                for index, width in column_widths:
+                    self.header().resizeSection(index, width)
+            if storage:
+                # Paranoia; hold a weak reference just in case subclass code
+                # does unusual things.
+                weakStorage = Weak.ref(storage)
+                def save_column_widths():
+                    storage = weakStorage()
+                    if storage:
+                        column_widths = list()
+                        for i in range(self.header().count()):
+                            column_widths.append((i, self.columnWidth(i),))
+                        storage.put(key, column_widths)
+                self.header().sectionResized.connect(save_column_widths)
+
+
+    def create_header_context_menu(self, position):
+        menu = QMenu()
+        for col in range(self.columnCount()):
+            header_text = self.headerItem().text(col)
+            action = QAction(header_text, parent=self)
+            action.setCheckable(True)
+            checked = self.column_visibility[col]
+            action.setChecked(checked)
+            action.triggered.connect(lambda checked, index=col: self.toggle_column(index, checked, emit_signal=True))
+            menu.addAction(action)
+
+        menu.exec_(self.header().viewport().mapToGlobal(position))
+
+    def _set_default_column_visibility(self):
+        self.column_visibility = [not self.isColumnHidden(col) for col in range(self.columnCount())]
+        return self.column_visibility
 
     def update_headers(self, headers):
         self.setColumnCount(len(headers))
@@ -662,6 +777,9 @@ class MyTreeWidget(QTreeWidget):
         for col in range(len(headers)):
             sm = QHeaderView.Stretch if col == self.stretch_column else QHeaderView.ResizeToContents
             self.header().setSectionResizeMode(col, sm)
+        self._set_default_column_visibility()
+        self._setup_save_column_visibility_mechanism()
+        self._setup_save_column_visual_order_mechanism()
 
     def editItem(self, item, column):
         if item and column in self.editable_columns:
