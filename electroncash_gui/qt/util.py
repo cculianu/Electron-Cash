@@ -762,6 +762,8 @@ class MyTreeWidget(QTreeWidget):
             checked = self.column_visibility[col]
             action.setChecked(checked)
             action.triggered.connect(lambda checked, index=col: self.toggle_column(index, checked, emit_signal=True))
+            if self.column_visibility.count(True) == 1 and checked:
+                action.setDisabled(True)
             menu.addAction(action)
 
         menu.exec_(self.header().viewport().mapToGlobal(position))
