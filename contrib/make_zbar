@@ -8,17 +8,46 @@ here=$(dirname $(realpath "$0" 2> /dev/null || grealpath "$0"))
 pkgname="zbar"
 info "Building $pkgname..."
 
+EXTRA_FLAGS="${EXTRA_FLAGS:-}"
 pushd "$here"/$pkgname || fail "Could not chdir to $here/$pkgname"
 if [ "$BUILD_TYPE" = "wine" ] ; then
     echo "libzbar_la_LDFLAGS += -Wc,-static" >> zbar/Makefile.am
     echo "LDFLAGS += -Wc,-static" >> Makefile.am
+elif [ "$BUILD_TYPE" = "darwin" ] ; then
+    # Workarounds for macOS
+    # - Explicitly disable xshm and xv support since it tries to turn itself on for some reason
+    EXTRA_FLAGS+=" --without-xshm --without-xv"
+    if which -s port && port version > /dev/null; then
+        # -- MacPorts --
+        # - Insist on using libiconv from macports, since the system one does not work on newer macOs
+        if port contents libiconv > /dev/null; then
+            # Have libiconv, proceed
+            # Determine MacPorts prefix, e.g.: /opt/local
+            iconv_path=$(port contents libiconv | grep 'include/iconv.h' | sed 's!include/iconv.h!!' \
+                          | sed 's!^ *!!' | sed 's!/ *$!!')
+            [ -n "${iconv_path}" ] || fail "Cannot determine path to MacPorts libiconv"
+            EXTRA_FLAGS+=" --with-libiconv-prefix=${iconv_path}"
+        else
+            fail "libiconv missing -- please install it with: sudo port install libiconv"
+        fi
+    elif which -s brew && brew --version > /dev/null; then
+        # -- HomeBrew --
+        brew info libiconv | grep -E '^Installed' > /dev/null || fail "libiconv missing -- please install it with: brew install libiconv"
+        brew_pfx=$(brew --prefix)
+        [ -n "${brew_pfx}" ] || fail "Cannot determine path to HomeBrew libiconv"
+        EXTRA_FLAGS+=" --with-libiconv-prefix=${brew_pfx}"
+    else
+        fail "Could not determine if using MacPots or HomeBrew -- please install one of them and then install libiconv"
+    fi
 fi
+echo "Extra config options: ${AUTOCONF_FLAGS} ${EXTRA_FLAGS}"
 if ! [ -x configure ] ; then
     autoreconf -vfi || fail "Could not run autoreconf for $pkgname. Please make sure you have automake and libtool installed, and try again."
 fi
 if ! [ -r config.status ] ; then
     ./configure \
         $AUTOCONF_FLAGS \
+        $EXTRA_FLAGS \
         --prefix="$here/$pkgname/dist" \
         --with-x=no \
         --enable-pthread=no \
